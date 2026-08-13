@@ -9,6 +9,7 @@ export default function Users() {
   const [form, setForm] = useState({ name: '', email: '', role: 'waiter', password: '', pin: '' });
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const [cred, setCred] = useState(null);
   const load = () => api('/api/users').then(setUsers).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
 
@@ -18,16 +19,8 @@ export default function Users() {
     catch (e) { setErr(e.message); }
   };
   const toggle = async (u) => { try { await api(`/api/users/${u.id}`, { method: 'PATCH', body: { active: !u.active } }); load(); } catch (e) { setErr(e.message); } };
-  const resetPin = async (u) => {
-    const pin = window.prompt(`New 4-digit PIN for ${u.name}:`);
-    if (!pin) return;
-    try { await api(`/api/users/${u.id}`, { method: 'PATCH', body: { pin } }); setMsg('PIN updated.'); } catch (e) { setErr(e.message); }
-  };
-  const resetPw = async (u) => {
-    const password = window.prompt(`New password for ${u.name}:`);
-    if (!password) return;
-    try { await api(`/api/users/${u.id}`, { method: 'PATCH', body: { password } }); setMsg('Password updated.'); } catch (e) { setErr(e.message); }
-  };
+  const resetPin = (u) => { setErr(''); setMsg(''); setCred({ user: u, kind: 'pin' }); };
+  const resetPw  = (u) => { setErr(''); setMsg(''); setCred({ user: u, kind: 'password' }); };
 
   return (
     <>
@@ -72,6 +65,60 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+      {cred && (
+        <CredentialModal
+          cred={cred}
+          onClose={() => setCred(null)}
+          onSaved={(m) => { setCred(null); setMsg(m); }}
+        />
+      )}
     </>
+  );
+}
+function CredentialModal({ cred, onClose, onSaved }) {
+  const { user, kind } = cred;
+  const isPin = kind === 'pin';
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const valid = isPin ? /^\d{4}$/.test(value) : value.trim().length > 0;
+
+  const save = async () => {
+    if (!valid || saving) return;
+    setSaving(true); setErr('');
+    try {
+      const body = isPin ? { pin: value } : { password: value };
+      await api(`/api/users/${user.id}`, { method: 'PATCH', body });
+      onSaved(isPin ? `PIN updated for ${user.name}.` : `Password updated for ${user.name}.`);
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+        <h2>{isPin ? 'Set till PIN' : 'Reset password'}</h2>
+        <div className="sub">{user.name} · {user.email}</div>
+        {err && <div className="err">{err}</div>}
+        <label>{isPin ? 'New 4-digit PIN' : 'New password'}</label>
+        <input
+          autoFocus
+          type={isPin ? 'text' : 'password'}
+          inputMode={isPin ? 'numeric' : undefined}
+          maxLength={isPin ? 4 : undefined}
+          value={value}
+          onChange={(e) => setValue(isPin ? e.target.value.replace(/\D/g, '') : e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); }}
+          placeholder={isPin ? '4 digits' : 'Enter a new password'}
+        />
+        {isPin && <div className="sub" style={{ margin: '6px 0 0' }}>Numbers only, exactly 4 digits.</div>}
+        <div className="btnrow" style={{ marginTop: 16, justifyContent: 'space-between' }}>
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn green" disabled={!valid || saving} onClick={save}>
+            {saving ? 'Saving…' : (isPin ? 'Save PIN' : 'Save password')}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
