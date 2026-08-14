@@ -99,16 +99,42 @@ router.post('/orders', requireRole(ORDER_TAKERS), async (req, res) => {
           lineTotal = unitPrice * qty;
         }
 
-        // Meal credit redemption: settles one standard plate line from an overnight stay
+        // Meal credit redemption: only one credit can be used for one plate.
         let mealCreditId = null;
+
         if (line.use_meal_credit && stay_id && mi.pricing_type === 'dual_fixed') {
           const mc = (await c.query(
-            `SELECT * FROM meal_credits WHERE stay_id=$1 AND status='issued' LIMIT 1 FOR UPDATE`, [stay_id])).rows[0];
-          if (mc) {
-            mealCreditId = mc.id;
-            lineTotal = Math.max(0, lineTotal - Number(mc.value));
-            await c.query(`UPDATE meal_credits SET status='redeemed', redeemed_order_id=$1 WHERE id=$2`, [order.id, mc.id]);
+            `SELECT *
+              FROM meal_credits
+              WHERE stay_id=$1
+                AND status='issued'
+              ORDER BY created_at
+              LIMIT 1
+              FOR UPDATE`,
+            [stay_id]
+          )).rows[0];
+
+          if (!mc) {
+            throw Object.assign(
+              new Error('No meal credit is available for this plate'),
+              { code: 400 }
+            );
           }
+
+          mealCreditId = mc.id;
+
+          lineTotal = Math.max(
+            0,
+            lineTotal - Number(mc.value)
+          );
+
+          await c.query(
+            `UPDATE meal_credits
+                SET status='redeemed',
+                    redeemed_order_id=$1
+              WHERE id=$2`,
+            [order.id, mc.id]
+          );
         }
 
         await c.query(
