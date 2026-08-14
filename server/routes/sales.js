@@ -61,7 +61,7 @@ router.get('/orders', async (req, res) => {
 // Create draft order. lines: [{menu_item_id, quantity, weight_kg, selected_options, use_meal_credit}]
 router.post('/orders', requireRole(ORDER_TAKERS), async (req, res) => {
   const { channel, stay_id, service_type, table_number, lines } = req.body;
-  if (!['restaurant', 'tuck_shop', 'room'].includes(channel)) return res.status(400).json({ error: 'Invalid channel' });
+  if (!['restaurant', 'tuck_shop', 'room', 'uber'].includes(channel)) return res.status(400).json({ error: 'Invalid channel' });
   if (req.user.role === 'waiter' && channel !== 'restaurant') return res.status(403).json({ error: 'Waiters can only take restaurant orders' });
   if (channel === 'room' && !stay_id) return res.status(400).json({ error: 'Room orders need the stay' });
   if (channel === 'restaurant' && !(table_number >= 1 && table_number <= 9))
