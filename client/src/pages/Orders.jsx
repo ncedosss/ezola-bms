@@ -185,8 +185,14 @@ function NewOrder({ menu, stays, onClose }) {
         {err && <div className="err">{err}</div>}
         <div className="tabs">
           <button className={channel === 'restaurant' ? 'on' : ''} onClick={() => setChannel('restaurant')}>Restaurant</button>
-          <button className={channel === 'room' ? 'on' : ''} onClick={() => setChannel('room')}>Room guest</button>
+          {!isWaiter && (
+            <button className={channel === 'room' ? 'on' : ''} onClick={() => setChannel('room')}>Room guest</button>
+          )}
+          <button className={channel === 'uber' ? 'on' : ''} onClick={() => { setChannel('uber'); setService('takeaway'); }}>Uber Eats</button>
         </div>
+        {channel === 'uber' && (
+          <div className="ok">Paid online via Uber Eats — no table, takeaway pricing. On the board, mark it paid with the <b>Uber Eats (online)</b> button; it won't be counted in the till.</div>
+        )}
         {channel === 'room' && (
           <>
             <label>Guest / room</label>
