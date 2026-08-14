@@ -17,6 +17,7 @@ export default function Orders() {
   const { user } = useAuth();
   const isManager = ['owner', 'office_manager', 'facility_manager'].includes(user.role);
   const canTakePayment = ['owner', 'office_manager', 'facility_manager', 'shop_attendant'].includes(user.role);
+   const isWaiter = user.role === 'waiter';
   const [till, setTill] = useState('restaurant');
   const [voidTarget, setVoidTarget] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -68,7 +69,9 @@ export default function Orders() {
       <div className="tabs">
         <span className="sub" style={{ alignSelf: 'center', marginRight: 6 }}>Taking payment at:</span>
         <button className={till === 'restaurant' ? 'on' : ''} onClick={() => setTill('restaurant')}>Restaurant till</button>
-        <button className={till === 'guest_house' ? 'on' : ''} onClick={() => setTill('guest_house')}>Guest house till</button>
+        {!isWaiter && (
+          <button className={till === 'guest_house' ? 'on' : ''} onClick={() => setTill('guest_house')}>Guest house till</button>
+        )}
       </div>
       {unconfirmed.length > 0 && (
         <div className="panel" style={{ marginBottom: 14, borderLeft: '4px solid #EFB44C' }}>
@@ -124,6 +127,8 @@ export default function Orders() {
 }
 
 function NewOrder({ menu, stays, onClose }) {
+  const { user } = useAuth();
+  const isWaiter = user.role === 'waiter';
   const [channel, setChannel] = useState('restaurant');
   const [stayId, setStayId] = useState('');
   const [service, setService] = useState('sit_down');

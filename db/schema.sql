@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  payable_type TEXT NOT NULL CHECK (payable_type IN ('order','stay','stay_topup')),
+  payable_type TEXT NOT NULL CHECK (payable_type IN ('order','stay','stay_topup','sundry')),
   payable_id UUID NOT NULL,
   method TEXT NOT NULL CHECK (method IN ('cash','card')),
   till TEXT NOT NULL CHECK (till IN ('restaurant','guest_house')),
