@@ -128,8 +128,9 @@ router.post('/orders', requireRole(ORDER_TAKERS), async (req, res) => {
 
 // Till-first: recording payment issues the numbered kitchen slip and deducts estimated stock.
 router.post('/orders/:id/pay', requireRole(PAYMENT_TAKERS), async (req, res) => {
-  const { method, till } = req.body;
-  if (!['cash', 'card'].includes(method)) return res.status(400).json({ error: 'method cash/card required' });
+  let { method, till } = req.body;
+  if (!['cash', 'card', 'uber_eats'].includes(method)) return res.status(400).json({ error: 'method must be cash, card or uber_eats' });
+  if (method === 'uber_eats') till = 'restaurant'; // paid online via Uber; no cash drawer, always restaurant
   if (!['restaurant', 'guest_house'].includes(till)) return res.status(400).json({ error: 'till required' });
   try {
     const out = await tx(async (c) => {

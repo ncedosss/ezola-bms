@@ -10,12 +10,13 @@ router.use(requireAuth);
 async function systemTotals(client, bdate, till) {
   const pay = (await client.query(
     `SELECT COALESCE(SUM(amount) FILTER (WHERE method='cash'),0) AS cash,
-            COALESCE(SUM(amount) FILTER (WHERE method='card'),0) AS card
-     FROM payments WHERE business_date=$1 AND till=$2`, [bdate, till])).rows[0];
+            COALESCE(SUM(amount) FILTER (WHERE method='card'),0) AS card,
+            COALESCE(SUM(amount) FILTER (WHERE method='uber_eats'),0) AS uber_eats
+        FROM payments WHERE business_date=$1 AND till=$2`, [bdate, till])).rows[0];
   const xfer = (await client.query(
     `SELECT COALESCE(SUM(amount) FILTER (WHERE to_till=$2),0) - COALESCE(SUM(amount) FILTER (WHERE from_till=$2),0) AS net
      FROM cash_transfers WHERE business_date=$1 AND confirmed_at IS NOT NULL`, [bdate, till])).rows[0];
-  return { cash: Number(pay.cash) + Number(xfer.net), card: Number(pay.card) };
+  return { cash: Number(pay.cash) + Number(xfer.net), card: Number(pay.card), uber_eats: Number(pay.uber_eats) };
 }
 
 // S12 - what the system expects before the count is entered

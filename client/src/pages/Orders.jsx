@@ -109,6 +109,7 @@ export default function Orders() {
                   <div className="btnrow" style={{ marginTop: 8 }}>
                     {canTakePayment && <button className="btn green sm" onClick={() => pay(o, 'cash')}>Paid cash</button>}
                     {canTakePayment && <button className="btn green sm" onClick={() => pay(o, 'card')}>Paid card</button>}
+                    {canTakePayment && o.channel === 'restaurant' && <button className="btn sm" onClick={() => pay(o, 'uber_eats')}>Uber Eats (online)</button>}
                     <button className="btn ghost sm" onClick={() => cancel(o)}>Cancel</button>
                   </div>
                 )}
