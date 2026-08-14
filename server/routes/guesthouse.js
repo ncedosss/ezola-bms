@@ -137,7 +137,17 @@ router.post('/stays/:id/topup', requireRole(RECEPTION_PLUS), async (req, res) =>
       if (!s || s.status !== 'active') throw Object.assign(new Error('Active stay not found'), { code: 404 });
       if (s.stay_type !== 'hourly') throw Object.assign(new Error('Top-ups apply to hourly stays'), { code: 400 });
 
-      const amount = Number(s.hourly_rate) * extra_hours;
+      // If the guest is already overdue, the system determines the
+      // overdue hours automatically. The user cannot choose the amount.
+      let actualExtraHours = extra_hours;
+
+      if (s.expires_at && new Date() > new Date(s.expires_at)) {
+        actualExtraHours = Math.ceil(
+          (Date.now() - new Date(s.expires_at).getTime()) / 3600000
+        );
+      }
+
+      const amount = Number(s.hourly_rate) * actualExtraHours;
       const bdate = businessDate();
       const pay = (await c.query(
         `INSERT INTO payments (payable_type,payable_id,method,till,amount,received_by,business_date)
@@ -145,12 +155,12 @@ router.post('/stays/:id/topup', requireRole(RECEPTION_PLUS), async (req, res) =>
         [s.id, payment_method, amount, req.user.id, bdate])).rows[0];
       await c.query(
         `INSERT INTO stay_topups (stay_id,extra_hours,amount,payment_id,created_by) VALUES ($1,$2,$3,$4,$5)`,
-        [s.id, extra_hours, amount, pay.id, req.user.id]);
+        [s.id, actualExtraHours, amount, pay.id, req.user.id]);
       const upd = (await c.query(
         `UPDATE stays SET hours_purchased = hours_purchased + $1,
                 expires_at = GREATEST(expires_at, now()) + make_interval(hours => $1::int),
                 amount_due = amount_due + $2, amount_paid = amount_paid + $2
-         WHERE id=$3 RETURNING *`, [extra_hours, amount, s.id])).rows[0];
+         WHERE id=$3 RETURNING *`, [actualExtraHours, amount, s.id])).rows[0];
       await audit(c, req.user.id, 'stay_topup', 'stays', s.id, { extra_hours, amount });
       return upd;
     });
@@ -169,12 +179,23 @@ router.post('/stays/:id/checkout', requireRole(RECEPTION_PLUS), async (req, res)
         [req.params.id])).rows[0];
       if (!s || s.status !== 'active') throw Object.assign(new Error('Active stay not found'), { code: 404 });
 
-      let overstayCharge = 0, extraHours = 0;
+      let overstayCharge = 0;
+      let extraHours = 0;
+
       if (s.expires_at && new Date() > new Date(s.expires_at)) {
-        extraHours = Math.ceil((Date.now() - new Date(s.expires_at).getTime()) / 3600000);
+        extraHours = Math.ceil(
+          (Date.now() - new Date(s.expires_at).getTime()) / 3600000
+        );
+
         overstayCharge = extraHours * Number(s.hourly_rate);
-        if (!['cash', 'card'].includes(overstay_payment_method))
-          throw Object.assign(new Error(`Guest overstayed ${extraHours}h - collect R${overstayCharge} (choose cash/card) before closing`), { code: 402 });
+
+        throw Object.assign(
+          new Error(
+            `Guest is overdue by ${extraHours}h. Collect R${overstayCharge} before checkout.`
+          ),
+          { code: 402 }
+        );
+      }
         const bdate = businessDate();
         const pay = (await c.query(
           `INSERT INTO payments (payable_type,payable_id,method,till,amount,received_by,business_date)

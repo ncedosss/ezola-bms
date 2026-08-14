@@ -169,6 +169,16 @@ function StayModal({ room, onClose }) {
   }, [room]);
 
   if (!stay) return null;
+  const isOverdue =
+  stay.expires_at && new Date() > new Date(stay.expires_at);
+
+  const overdueHours = isOverdue
+    ? Math.ceil(
+        (Date.now() - new Date(stay.expires_at).getTime()) / 3600000
+      )
+    : 0;
+
+  const overdueAmount = overdueHours * Number(room.hourly_rate);
   const topup = async () => {
     setErr('');
     try {
@@ -206,16 +216,73 @@ function StayModal({ room, onClose }) {
 
         {stay.stay_type === 'hourly' && (
           <div className="panel" style={{ margin: '10px 0' }}>
-            <h2>Top up (pay-as-you-go)</h2>
-            <div className="formrow">
-              <div><label>Extra hours</label>
-                <select value={extra} onChange={(e) => setExtra(e.target.value)}>{[1,2,3,4,5].map((h) => <option key={h} value={h}>{h}</option>)}</select></div>
-              <div><label>Method</label>
-                <select value={method} onChange={(e) => setMethod(e.target.value)}><option value="cash">Cash</option><option value="card">Card</option></select></div>
-            </div>
-            <button className="btn amber" style={{ marginTop: 10 }} onClick={topup}>
-              Take {R(Number(room.hourly_rate) * extra)} & extend
-            </button>
+            <h2>{isOverdue ? 'Overdue payment' : 'Top up (pay-as-you-go)'}</h2>
+
+            {isOverdue ? (
+              <>
+                <div className="err">
+                  Guest is overdue by {overdueHours} hour{overdueHours !== 1 ? 's' : ''}.
+                  <br />
+                  Amount due: <strong>{R(overdueAmount)}</strong>
+                </div>
+
+                <div className="formrow">
+                  <div>
+                    <label>Payment method</label>
+                    <select
+                      value={method}
+                      onChange={(e) => setMethod(e.target.value)}
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="card">Card</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  className="btn amber"
+                  style={{ marginTop: 10 }}
+                  onClick={topup}
+                >
+                  Take {R(overdueAmount)} & extend
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="formrow">
+                  <div>
+                    <label>Extra hours</label>
+                    <select
+                      value={extra}
+                      onChange={(e) => setExtra(e.target.value)}
+                    >
+                      {[1, 2, 3, 4, 5].map((h) => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label>Method</label>
+                    <select
+                      value={method}
+                      onChange={(e) => setMethod(e.target.value)}
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="card">Card</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  className="btn amber"
+                  style={{ marginTop: 10 }}
+                  onClick={topup}
+                >
+                  Take {R(Number(room.hourly_rate) * extra)} & extend
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -231,7 +298,31 @@ function StayModal({ room, onClose }) {
               </div>
             </>
           ) : (
-            <button className="btn red" onClick={() => doCheckout(null)}>Check out - room to cleaning</button>
+            <div className="panel" style={{ margin: '10px 0' }}>
+              <h2>Check out (key returned)</h2>
+
+              {isOverdue ? (
+                <div className="err">
+                  Checkout is not available yet.
+                  <br />
+                  Please collect the overdue amount of{' '}
+                  <strong>{R(overdueAmount)}</strong> first.
+                </div>
+              ) : (
+                <>
+                  <div className="sub">
+                    Early departure: no refunds.
+                  </div>
+
+                  <button
+                    className="btn red"
+                    onClick={() => doCheckout(null)}
+                  >
+                    Check out - room to cleaning
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
 
