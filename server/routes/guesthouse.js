@@ -89,17 +89,21 @@ router.post('/stays', requireRole(RECEPTION_PLUS), async (req, res) => {
 
       let meal_credit = null;
       if (stay_type === 'overnight') {
-        // R550 includes a R65 plate. Cash -> R65 physically walked to restaurant till (cash_transfer).
-        // Card -> flagged on the kitchen slip, no cash moves.
+        // R550 includes TWO R65 plates (R130 total). Cash -> R130 physically walked to the
+        // restaurant till (one transfer). Card -> flagged on the kitchen slip, no cash moves.
         const funding = payment_method === 'cash' ? 'cash_walked' : 'card_noted';
-        meal_credit = (await c.query(
-          `INSERT INTO meal_credits (stay_id, value, funding_method) VALUES ($1, 65, $2) RETURNING *`,
-          [stay.id, funding])).rows[0];
+        const credits = [];
+        for (let i = 0; i < 2; i++) {
+          credits.push((await c.query(
+            `INSERT INTO meal_credits (stay_id, value, funding_method) VALUES ($1, 65, $2) RETURNING *`,
+            [stay.id, funding])).rows[0]);
+        }
+        meal_credit = credits[0];
         if (funding === 'cash_walked') {
           await c.query(
             `INSERT INTO cash_transfers (from_till,to_till,amount,meal_credit_id,carried_by,business_date)
-             VALUES ('guest_house','restaurant',65,$1,$2,$3)`,
-            [meal_credit.id, req.user.id, bdate]);
+             VALUES ('guest_house','restaurant',130,$1,$2,$3)`,
+            [credits[0].id, req.user.id, bdate]);
         }
       }
       await audit(c, req.user.id, 'check_in', 'stays', stay.id, { room: room.room_number, stay_type, amount });

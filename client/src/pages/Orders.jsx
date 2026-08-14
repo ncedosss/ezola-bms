@@ -45,7 +45,7 @@ export default function Orders() {
   const confirmWalk = async (t) => {
     try {
       await api(`/api/guesthouse/cash-transfers/${t.id}/confirm`, { method: 'PATCH' });
-      toast(`R65 walk from ${t.room_number ? 'room ' + t.room_number : 'guest house'} confirmed - counted into this till's cash.`, 'success');
+      toast(`${R(t.amount)} walk from ${t.room_number ? 'room ' + t.room_number : 'guest house'} confirmed - counted into this till's cash.`, 'success');
       load();
     } catch (e) { toast(e.message, 'error', 7000); }
   };
@@ -193,7 +193,7 @@ function NewOrder({ menu, stays, onClose }) {
               <option value="">Select active stay…</option>
               {stays.map((s) => <option key={s.id} value={s.id}>{s.room_number} - {s.guest_name} ({s.stay_type})</option>)}
             </select>
-            {hasCredit && <div className="ok">This stay has an unredeemed R65 overnight meal credit - tick it on a plate line below.</div>}
+            {hasCredit && <div className="ok">This stay has overnight meal credit for 2 plates (R65 each) - tick "use credit" on up to two plate lines.</div>}
           </>
         )}
         {channel === 'restaurant' && (
@@ -239,41 +239,45 @@ function NewOrder({ menu, stays, onClose }) {
             <tbody>
               {lines.map((l, i) => (
                 <tr key={i}>
-                  <td>
-                    {l.name}
-                    {l.option_groups?.map((g) => (
-                      <select key={g.id} style={{ width: 'auto', marginLeft: 6, padding: '3px 6px' }}
-                        value={l.selected_options[g.name]}
-                        onChange={(e) => {
-                          const next = [...lines];
-                          next[i] = { ...l, selected_options: { ...l.selected_options, [g.name]: e.target.value } };
-                          setLines(next);
-                        }}>
-                        {g.options.map((o) => <option key={o.id}>{o.name}</option>)}
-                      </select>
-                    ))}
-                    {l.type === 'per_kg' && (
-                      <input type="number" step="0.01" placeholder="kg" style={{ width: 90, marginLeft: 6, padding: '3px 6px' }}
-                        value={l.weight_kg}
-                        onChange={(e) => { const next = [...lines]; next[i] = { ...l, weight_kg: e.target.value }; setLines(next); }} />
-                    )}
-                    {l.type === 'dual_fixed' && channel === 'room' && hasCredit && (
-                      <label style={{ display: 'inline', marginLeft: 8, fontWeight: 400 }}>
-                        <input type="checkbox" style={{ width: 'auto' }} checked={!!l.use_meal_credit}
-                          onChange={(e) => { const next = [...lines]; next[i] = { ...l, use_meal_credit: e.target.checked }; setLines(next); }} /> use R65 credit
-                      </label>
-                    )}
+                  <td style={{ verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      {l.name}
+                      {l.option_groups?.map((g) => (
+                        <select key={g.id} style={{ width: 'auto', padding: '3px 6px', minHeight: 'auto' }}
+                          value={l.selected_options[g.name]}
+                          onChange={(e) => {
+                            const next = [...lines];
+                            next[i] = { ...l, selected_options: { ...l.selected_options, [g.name]: e.target.value } };
+                            setLines(next);
+                          }}>
+                          {g.options.map((o) => <option key={o.id}>{o.name}</option>)}
+                        </select>
+                      ))}
+                      {l.type === 'per_kg' && (
+                        <input type="number" step="0.01" placeholder="kg" style={{ width: 90, padding: '3px 6px', minHeight: 'auto' }}
+                          value={l.weight_kg}
+                          onChange={(e) => { const next = [...lines]; next[i] = { ...l, weight_kg: e.target.value }; setLines(next); }} />
+                      )}
+                      {l.type === 'dual_fixed' && channel === 'room' && hasCredit && (
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 400, whiteSpace: 'nowrap' }}>
+                          <input type="checkbox" style={{ width: 'auto', minHeight: 'auto', margin: 0 }} checked={!!l.use_meal_credit}
+                            onChange={(e) => { const next = [...lines]; next[i] = { ...l, use_meal_credit: e.target.checked }; setLines(next); }} /> use R65 credit
+                        </label>
+                      )}
+                    </div>
                   </td>
-                  <td style={{ width: 60 }}>
+                  <td style={{ width: 70, verticalAlign: 'middle' }}>
                     {l.type !== 'per_kg' && (
-                      <input type="number" min="1" value={l.quantity}
+                      <input type="number" min="1" value={l.quantity} style={{ padding: '3px 6px', minHeight: 'auto', textAlign: 'center' }}
                         onChange={(e) => { const next = [...lines]; next[i] = { ...l, quantity: Math.max(1, +e.target.value) }; setLines(next); }} />
                     )}
                   </td>
-                  <td style={{ textAlign: 'right' }}>
+                  <td style={{ textAlign: 'right', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                     {R((l.type === 'per_kg' ? Number(l.weight_kg || 0) * l.price : l.price * (l.quantity || 1)) - (l.use_meal_credit ? 65 : 0))}
                   </td>
-                  <td><button className="btn ghost sm" onClick={() => setLines(lines.filter((_, j) => j !== i))}>×</button></td>
+                  <td style={{ verticalAlign: 'middle', textAlign: 'right' }}>
+                    <button className="btn ghost sm" onClick={() => setLines(lines.filter((_, j) => j !== i))}>×</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
