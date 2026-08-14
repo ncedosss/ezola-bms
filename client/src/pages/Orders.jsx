@@ -246,7 +246,7 @@ function NewOrder({ menu, stays, onClose }) {
             <tbody>
               {lines.map((l, i) => (
                 <tr key={i}>
-                  <td style={{ verticalAlign: 'middle' }}>
+                  <td style={{ verticalAlign: 'top' }}>
                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                       {l.name}
                       {l.option_groups?.map((g) => (
@@ -273,16 +273,16 @@ function NewOrder({ menu, stays, onClose }) {
                       )}
                     </div>
                   </td>
-                  <td style={{ width: 70, verticalAlign: 'middle' }}>
+                  <td style={{ width: 70, verticalAlign: 'top' }}>
                     {l.type !== 'per_kg' && (
                       <input type="number" min="1" value={l.quantity} style={{ padding: '3px 6px', minHeight: 'auto', textAlign: 'center' }}
                         onChange={(e) => { const next = [...lines]; next[i] = { ...l, quantity: Math.max(1, +e.target.value) }; setLines(next); }} />
                     )}
                   </td>
-                  <td style={{ textAlign: 'right', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                  <td style={{ textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap', paddingTop: 15 }}>
                     {R((l.type === 'per_kg' ? Number(l.weight_kg || 0) * l.price : l.price * (l.quantity || 1)) - (l.use_meal_credit ? 65 : 0))}
                   </td>
-                  <td style={{ verticalAlign: 'middle', textAlign: 'right' }}>
+                  <td style={{ verticalAlign: 'top', textAlign: 'right' }}>
                     <button className="btn ghost sm" onClick={() => setLines(lines.filter((_, j) => j !== i))}>×</button>
                   </td>
                 </tr>
