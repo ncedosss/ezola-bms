@@ -8,9 +8,7 @@ export default function Stock() {
   const [register, setRegister] = useState('kitchen');
   const [items, setItems] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
-  const [modal, setModal] = useState(null); // {type:'purchase'|'adjust', item}
-  const [err, setErr] = useState('');
-  const [msg, setMsg] = useState('');
+  const [modal, setModal] = useState(null); 
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [q, setQ] = useState('');      
