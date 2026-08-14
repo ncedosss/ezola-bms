@@ -214,7 +214,7 @@ function StayModal({ room, onClose }) {
           <div className="ok">Unredeemed R65 meal credit on this stay ({stay.meal_credits.find(m=>m.status==='issued').funding_method === 'cash_walked' ? 'cash walked' : 'card noted'}).</div>
         )}
 
-        {stay.stay_type === 'hourly' && (
+        {(stay.stay_type === 'hourly' || isOverdue) && (
           <div className="panel" style={{ margin: '10px 0' }}>
             <h2>{isOverdue ? 'Overdue payment' : 'Top up (pay-as-you-go)'}</h2>
 

@@ -135,7 +135,16 @@ router.post('/stays/:id/topup', requireRole(RECEPTION_PLUS), async (req, res) =>
         `SELECT s.*, r.hourly_rate FROM stays s JOIN rooms r ON r.id=s.room_id WHERE s.id=$1 FOR UPDATE OF s`,
         [req.params.id])).rows[0];
       if (!s || s.status !== 'active') throw Object.assign(new Error('Active stay not found'), { code: 404 });
-      if (s.stay_type !== 'hourly') throw Object.assign(new Error('Top-ups apply to hourly stays'), { code: 400 });
+      const overdueMs = s.expires_at ? Date.now() - new Date(s.expires_at).getTime() : 0;
+
+      const isOverdue = overdueMs > 0;
+
+      if (s.stay_type !== 'hourly' && !isOverdue) {
+        throw Object.assign(
+          new Error('Top-ups apply to hourly stays unless the guest is overdue'),
+          { code: 400 }
+        );
+      }
 
       // If the guest is already overdue, the system determines the
       // overdue hours automatically. The user cannot choose the amount.
@@ -157,7 +166,7 @@ router.post('/stays/:id/topup', requireRole(RECEPTION_PLUS), async (req, res) =>
         `INSERT INTO stay_topups (stay_id,extra_hours,amount,payment_id,created_by) VALUES ($1,$2,$3,$4,$5)`,
         [s.id, extra_hours, amount, pay.id, req.user.id]);
       const upd = (await c.query(
-        `UPDATE stays SET hours_purchased = hours_purchased + $1,
+        `UPDATE stays SET hours_purchased = COALESCE(hours_purchased, 0) + $1,
                 expires_at = GREATEST(expires_at, now()) + make_interval(hours => $1::int),
                 amount_due = amount_due + $2, amount_paid = amount_paid + $2
          WHERE id=$3 RETURNING *`, [extra_hours, amount, s.id])).rows[0];
