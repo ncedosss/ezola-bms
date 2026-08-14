@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS recipe_consumption (
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number VARCHAR(20) NOT NULL,                -- R-014 / S-031 / RM-002, resets daily
-  channel TEXT NOT NULL CHECK (channel IN ('restaurant','tuck_shop','room')),
+  channel TEXT NOT NULL CHECK (channel IN ('restaurant','tuck_shop','room', 'uber')),
   stay_id UUID REFERENCES stays(id),
   service_type TEXT NOT NULL DEFAULT 'sit_down' CHECK (service_type IN ('sit_down','takeaway')),
   table_number INTEGER CHECK (table_number BETWEEN 1 AND 9),
