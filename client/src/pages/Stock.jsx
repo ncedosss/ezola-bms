@@ -11,12 +11,17 @@ export default function Stock() {
   const [modal, setModal] = useState(null); // {type:'purchase'|'adjust', item}
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+  const [q, setQ] = useState('');      
+  const [cat, setCat] = useState('');   
 
   const load = () => {
     api(`/api/stock?register=${register}`).then(setItems).catch((e) => setErr(e.message));
     api('/api/stock/adjustments?status=pending').then(setAdjustments).catch(() => {});
   };
   useEffect(load, [register]);
+  useEffect(() => { setQ(''); setCat(''); }, [register]); 
 
   const decide = async (a, decision) => {
     setErr('');
@@ -24,10 +29,21 @@ export default function Stock() {
     catch (e) { setErr(e.message); }
   };
 
+  const categories = [...new Set(items.map((s) => s.category).filter(Boolean))].sort();
+  const needle = q.trim().toLowerCase();
+  const filtered = items.filter((s) =>
+    (!cat || s.category === cat) &&
+    (!needle || s.name.toLowerCase().includes(needle) || (s.category || '').toLowerCase().includes(needle)));
+
   return (
     <>
-      <h1>Stock Control</h1>
-      <div className="sub">Purchases add stock instantly. Adjustments need a reason and the owner's approval before they touch the numbers.</div>
+      <div className="btnrow" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1>Stock Control</h1>
+          <div className="sub">Purchases add stock instantly. Adjustments need a reason and the owner's approval before they touch the numbers.</div>
+        </div>
+        <button className="btn green" onClick={() => setModal({ type: 'new' })}>+ New stock item</button>
+      </div>
       {err && <div className="err" onClick={() => setErr('')}>{err}</div>}
       {msg && <div className="ok" onClick={() => setMsg('')}>{msg}</div>}
 
@@ -58,12 +74,22 @@ export default function Stock() {
           <button key={r} className={register === r ? 'on' : ''} onClick={() => setRegister(r)}>{r.replace('_', ' ')}</button>
         ))}
       </div>
+      <div className="btnrow" style={{ gap: 8, margin: '10px 0', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search this register by name…"
+          style={{ flex: '1 1 240px', minWidth: 0 }} />
+        <select value={cat} onChange={(e) => setCat(e.target.value)} style={{ width: 'auto' }}>
+          <option value="">All categories</option>
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        {(q || cat) && <button className="btn ghost sm" onClick={() => { setQ(''); setCat(''); }}>Clear</button>}
+        <span className="sub" style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>{filtered.length} of {items.length}</span>
+      </div>
 
       <div className="panel">
         <table>
           <thead><tr><th>Item</th><th>Category</th><th>On hand</th><th>Threshold</th><th>Cost/unit</th><th></th></tr></thead>
           <tbody>
-            {items.map((s) => (
+            {filtered.map((s) => (
               <tr key={s.id} className={s.is_low ? 'lowrow' : ''} style={Number(s.current_quantity) <= 0 ? { opacity: 0.55 } : undefined}>
                 <td>{s.name}
                   {Number(s.current_quantity) <= 0 && <span className="badge red">SOLD OUT</span>}
@@ -80,7 +106,12 @@ export default function Stock() {
                   {' '}<button className="btn sm ghost" onClick={() => setModal({ type: 'edit', item: s })}>Edit</button>
                 </td>
               </tr>
-            ))}
+          ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan="6" className="sub" style={{ textAlign: 'center', padding: '18px' }}>
+                No items match{q ? ` “${q}”` : ''}{cat ? ` in ${cat}` : ''}.
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -89,6 +120,7 @@ export default function Stock() {
       {modal?.type === 'transfer' && <TransferModal item={modal.item} onClose={() => { setModal(null); load(); }} />}
       {modal?.type === 'adjust' && <AdjustModal item={modal.item} onClose={() => { setModal(null); load(); }} />}
       {modal?.type === 'edit' && <EditItemModal item={modal.item} onClose={() => { setModal(null); load(); }} />}
+      {modal?.type === 'new' && <NewItemModal register={register} categories={categories} onClose={() => { setModal(null); load(); }} />}
     </>
   );
 }
@@ -259,6 +291,63 @@ function EditItemModal({ item, onClose }) {
         <div className="btnrow" style={{ marginTop: 14, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
           <button className="btn green" disabled={!f.name.trim()} onClick={submit}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function NewItemModal({ register, categories = [], onClose }) {
+  const [f, setF] = useState({
+    register, name: '', category: '', unit: 'unit', low_stock_threshold: '', plate_yield: '',
+  });
+  const [err, setErr] = useState('');
+  const submit = async () => {
+    setErr('');
+    try {
+      await api('/api/stock/items', { method: 'POST', body: {
+        register: f.register,
+        name: f.name.trim(),
+        category: f.category.trim() || null,
+        unit: f.unit,
+        low_stock_threshold: f.low_stock_threshold === '' ? null : Number(f.low_stock_threshold),
+        plate_yield: f.plate_yield === '' ? null : Number(f.plate_yield),
+      }});
+      onClose();
+    } catch (e) { setErr(e.message); }
+  };
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>New stock item</h2>
+        <div className="sub">Creates the item at 0 on hand - use "+ Purchase" afterwards to add stock. Set a sell price later via Edit if it's sold directly.</div>
+        {err && <div className="err">{err}</div>}
+        <datalist id="stock-cats">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+        <label>Name *</label>
+        <input value={f.name} autoFocus onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. Toilet paper" />
+        <div className="formrow">
+          <div><label>Register *</label>
+            <select value={f.register} onChange={(e) => setF({ ...f, register: e.target.value })}>
+              {['kitchen', 'shop', 'guest_house'].map((r) => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+            </select></div>
+          <div><label>Unit *</label>
+            <select value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}>
+              {['kg', 'litre', 'unit', 'whole_animal', 'cylinder'].map((u) => <option key={u} value={u}>{u}</option>)}
+            </select></div>
+        </div>
+        <div className="formrow">
+          <div><label>Category</label>
+            <input list="stock-cats" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} placeholder="e.g. household" /></div>
+          <div><label>Low-stock threshold</label>
+            <input type="number" step="0.01" value={f.low_stock_threshold} onChange={(e) => setF({ ...f, low_stock_threshold: e.target.value })} placeholder="blank = no alert" /></div>
+        </div>
+        <div className="formrow">
+          <div><label>Plate yield (per unit)</label>
+            <input type="number" step="0.1" value={f.plate_yield} onChange={(e) => setF({ ...f, plate_yield: e.target.value })} placeholder="e.g. 10 (a sheep)" /></div>
+          <div></div>
+        </div>
+        <div className="btnrow" style={{ marginTop: 14, justifyContent: 'space-between' }}>
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn green" disabled={!f.name.trim()} onClick={submit}>Create item</button>
         </div>
       </div>
     </div>

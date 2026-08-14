@@ -235,7 +235,7 @@ function NewOrder({ menu, stays, onClose }) {
         </div>
 
         {lines.length > 0 && (
-          <table style={{ marginTop: 12 }}>
+          <table style={{ marginTop: 12, width: '100%' }}>
             <tbody>
               {lines.map((l, i) => (
                 <tr key={i}>
