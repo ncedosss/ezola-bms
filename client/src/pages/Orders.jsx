@@ -142,6 +142,8 @@ function NewOrder({ menu, stays, onClose }) {
   const addons = menu.filter((m) => ['addon', 'protein_standalone'].includes(m.category) && m.is_available);
   const stay = stays.find((s) => s.id === stayId);
   const hasCredit = stay && (stay.meal_credits || []).some((m) => m.status === 'issued');
+  const creditsAvailable = stay ? (stay.meal_credits || []).filter((m) => m.status === 'issued').length : 0;
+  const creditsUsed = lines.filter((l) => l.use_meal_credit).length;
 
   const addPlate = (item) => {
     const sel = {};
@@ -200,7 +202,7 @@ function NewOrder({ menu, stays, onClose }) {
               <option value="">Select active stay…</option>
               {stays.map((s) => <option key={s.id} value={s.id}>{s.room_number} - {s.guest_name} ({s.stay_type})</option>)}
             </select>
-            {hasCredit && <div className="ok">This stay has overnight meal credit for 2 plates (R65 each) - tick "use credit" on up to two plate lines.</div>}
+            {hasCredit && <div className="ok">This stay has {creditsAvailable} overnight meal credit{creditsAvailable > 1 ? 's' : ''} (R65 each). Tick "use R65 credit" on up to {creditsAvailable} plate line{creditsAvailable > 1 ? 's' : ''} — {creditsUsed}/{creditsAvailable} used.</div>}
           </>
         )}
         {channel === 'restaurant' && (
@@ -266,9 +268,13 @@ function NewOrder({ menu, stays, onClose }) {
                           onChange={(e) => { const next = [...lines]; next[i] = { ...l, weight_kg: e.target.value }; setLines(next); }} />
                       )}
                       {l.type === 'dual_fixed' && channel === 'room' && hasCredit && (
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 400, whiteSpace: 'nowrap' }}>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 400, whiteSpace: 'nowrap', opacity: (!l.use_meal_credit && creditsUsed >= creditsAvailable) ? 0.45 : 1 }}>
                           <input type="checkbox" style={{ width: 'auto', minHeight: 'auto', margin: 0 }} checked={!!l.use_meal_credit}
-                            onChange={(e) => { const next = [...lines]; next[i] = { ...l, use_meal_credit: e.target.checked }; setLines(next); }} /> use R65 credit
+                            disabled={!l.use_meal_credit && creditsUsed >= creditsAvailable}
+                            onChange={(e) => {
+                              if (e.target.checked && lines.filter((x, j) => j !== i && x.use_meal_credit).length >= creditsAvailable) return;
+                              const next = [...lines]; next[i] = { ...l, use_meal_credit: e.target.checked }; setLines(next);
+                            }} /> use R65 credit
                         </label>
                       )}
                     </div>
