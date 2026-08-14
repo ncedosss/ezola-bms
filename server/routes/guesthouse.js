@@ -155,12 +155,12 @@ router.post('/stays/:id/topup', requireRole(RECEPTION_PLUS), async (req, res) =>
         [s.id, payment_method, amount, req.user.id, bdate])).rows[0];
       await c.query(
         `INSERT INTO stay_topups (stay_id,extra_hours,amount,payment_id,created_by) VALUES ($1,$2,$3,$4,$5)`,
-        [s.id, actualExtraHours, amount, pay.id, req.user.id]);
+        [s.id, extra_hours, amount, pay.id, req.user.id]);
       const upd = (await c.query(
         `UPDATE stays SET hours_purchased = hours_purchased + $1,
                 expires_at = GREATEST(expires_at, now()) + make_interval(hours => $1::int),
                 amount_due = amount_due + $2, amount_paid = amount_paid + $2
-         WHERE id=$3 RETURNING *`, [actualExtraHours, amount, s.id])).rows[0];
+         WHERE id=$3 RETURNING *`, [extra_hours, amount, s.id])).rows[0];
       await audit(c, req.user.id, 'stay_topup', 'stays', s.id, { extra_hours, amount });
       return upd;
     });
@@ -191,19 +191,11 @@ router.post('/stays/:id/checkout', requireRole(RECEPTION_PLUS), async (req, res)
 
         throw Object.assign(
           new Error(
-            `Guest is overdue by ${extraHours}h. Collect R${overstayCharge} before checkout.`
+            `Guest is overdue by ${extraHours} hour${extraHours !== 1 ? 's' : ''}. ` +
+            `Collect R${overstayCharge} before checkout.`
           ),
           { code: 402 }
         );
-      }
-        const bdate = businessDate();
-        const pay = (await c.query(
-          `INSERT INTO payments (payable_type,payable_id,method,till,amount,received_by,business_date)
-           VALUES ('stay_topup',$1,$2,'guest_house',$3,$4,$5) RETURNING id`,
-          [s.id, overstay_payment_method, overstayCharge, req.user.id, bdate])).rows[0];
-        await c.query(
-          `INSERT INTO stay_topups (stay_id,extra_hours,amount,payment_id,created_by) VALUES ($1,$2,$3,$4,$5)`,
-          [s.id, extraHours, overstayCharge, pay.id, req.user.id]);
       }
       
       await c.query(`UPDATE meal_credits SET status='expired' WHERE stay_id=$1 AND status='issued'`, [s.id]);
