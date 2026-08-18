@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
 import { useToast } from '../components/Toast.jsx';
 
-// Owner-only: set the real prices and flip availability (braai after renovation, alcohol after licence)
+// Owner-only: set the real prices, flip availability, and add brand-new items.
 export default function Menu() {
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [err, setErr] = useState('');
+  const [showNew, setShowNew] = useState(false);
   const load = () => api('/api/menu').then(setItems).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
 
@@ -33,9 +34,14 @@ export default function Menu() {
 
   return (
     <>
-      <h1>Menu & Prices</h1>
-      <div className="sub">Owner only. Changes apply to new orders immediately and are audit-logged.</div>
-      {err && <div className="err">{err}</div>}
+      <div className="btnrow" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1>Menu &amp; Prices</h1>
+          <div className="sub">Owner only. Changes apply to new orders immediately and are audit-logged.</div>
+        </div>
+        <button className="btn green" onClick={() => setShowNew(true)}>+ New menu item</button>
+      </div>
+      {err && <div className="err" onClick={() => setErr('')}>{err}</div>}
       {cats.map((cat) => (
         <div className="panel" style={{ marginBottom: 14 }} key={cat}>
           <h2>{cat.replace(/_/g, ' ')}</h2>
@@ -63,6 +69,133 @@ export default function Menu() {
           </table>
         </div>
       ))}
+
+      {showNew && (
+        <NewMenuItemModal
+          onClose={() => setShowNew(false)}
+          onSaved={(created) => { setShowNew(false); toast(`${created.name} added.`, 'success'); load(); }}
+        />
+      )}
     </>
+  );
+}
+
+const CATEGORIES = [
+  ['plate', 'Plate (meal)'],
+  ['protein_standalone', 'Protein (standalone)'],
+  ['braai_per_kg', 'Braai (per kg)'],
+  ['drink', 'Drink'],
+  ['alcohol', 'Alcohol'],
+  ['snack', 'Snack'],
+  ['household', 'Household'],
+  ['addon', 'Add-on'],
+];
+
+const PRICING = [
+  ['dual_fixed', 'Sit-down & takeaway (fixed)'],
+  ['per_kg', 'Per kilogram'],
+  ['unit', 'Per unit / each'],
+];
+
+const REGISTERS = [
+  ['', 'Not linked'],
+  ['kitchen', 'Kitchen'],
+  ['shop', 'Shop'],
+  ['guest_house', 'Guest house'],
+];
+
+function NewMenuItemModal({ onClose, onSaved }) {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('drink');
+  const [pricing_type, setPricing] = useState('unit');
+  const [price_sit_down, setSit] = useState('');
+  const [price_takeaway, setTake] = useState('');
+  const [price_per_kg, setKg] = useState('');
+  const [price_unit, setUnit] = useState('');
+  const [stock_register, setRegister] = useState('');
+  const [is_available, setAvailable] = useState(true);
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Which price fields are required for the chosen pricing type
+  const priceReady =
+    pricing_type === 'dual_fixed' ? (price_sit_down !== '' && price_takeaway !== '') :
+    pricing_type === 'per_kg'     ? (price_per_kg !== '') :
+                                    (price_unit !== '');
+
+  const canSave = name.trim() !== '' && priceReady && !saving;
+
+  const submit = async () => {
+    setErr(''); setSaving(true);
+    try {
+      const created = await api('/api/menu', { method: 'POST', body: {
+        name: name.trim(), category, pricing_type,
+        price_sit_down, price_takeaway, price_per_kg, price_unit,
+        stock_register: stock_register || null, is_available,
+      }});
+      onSaved(created);
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>New menu item</h2>
+        <div className="sub">Owner only. The item appears on the menu and becomes orderable immediately.</div>
+        {err && <div className="err">{err}</div>}
+
+        <label>Name *</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Chicken &amp; chips" autoFocus />
+
+        <div className="formrow">
+          <div>
+            <label>Category *</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
+            </select>
+          </div>
+          <div>
+            <label>Pricing *</label>
+            <select value={pricing_type} onChange={(e) => setPricing(e.target.value)}>
+              {PRICING.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {pricing_type === 'dual_fixed' && (
+          <div className="formrow">
+            <div><label>Sit-down price (R) *</label><input type="number" step="0.01" value={price_sit_down} onChange={(e) => setSit(e.target.value)} /></div>
+            <div><label>Takeaway price (R) *</label><input type="number" step="0.01" value={price_takeaway} onChange={(e) => setTake(e.target.value)} /></div>
+          </div>
+        )}
+        {pricing_type === 'per_kg' && (
+          <>
+            <label>Price per kg (R) *</label>
+            <input type="number" step="0.01" value={price_per_kg} onChange={(e) => setKg(e.target.value)} />
+          </>
+        )}
+        {pricing_type === 'unit' && (
+          <>
+            <label>Price each (R) *</label>
+            <input type="number" step="0.01" value={price_unit} onChange={(e) => setUnit(e.target.value)} />
+          </>
+        )}
+
+        <label>Stock register (optional)</label>
+        <select value={stock_register} onChange={(e) => setRegister(e.target.value)}>
+          {REGISTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
+        </select>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+          <input type="checkbox" checked={is_available} onChange={(e) => setAvailable(e.target.checked)} style={{ width: 'auto' }} />
+          On sale straight away
+        </label>
+
+        <div className="btnrow" style={{ marginTop: 16, justifyContent: 'space-between' }}>
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn green" disabled={!canSave} onClick={submit}>{saving ? 'Saving…' : 'Add menu item'}</button>
+        </div>
+      </div>
+    </div>
   );
 }

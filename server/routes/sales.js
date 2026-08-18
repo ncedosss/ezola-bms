@@ -246,4 +246,46 @@ router.get('/meal-credits', async (req, res) => {
   res.json(rows);
 });
 
+// Owner-only: create a brand-new menu item (mirrors Stock's "+ New item")
+router.post('/menu', requireRole('owner'), async (req, res) => {
+  const { name, category, pricing_type,
+          price_sit_down, price_takeaway, price_per_kg, price_unit,
+          is_available, stock_register } = req.body;
+
+  const CATEGORIES = ['plate','protein_standalone','braai_per_kg','drink','alcohol','snack','household','addon'];
+  const PRICING    = ['dual_fixed','per_kg','unit'];
+  const REGISTERS  = ['kitchen','shop','guest_house'];
+
+  if (!name || !name.trim())              return res.status(400).json({ error: 'Name is required' });
+  if (!CATEGORIES.includes(category))     return res.status(400).json({ error: 'Invalid category' });
+  if (!PRICING.includes(pricing_type))    return res.status(400).json({ error: 'Invalid pricing type' });
+  if (stock_register && !REGISTERS.includes(stock_register))
+                                          return res.status(400).json({ error: 'Invalid register' });
+
+  // Keep only the price that matches the chosen pricing type; null the rest
+  const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
+  const psd = pricing_type === 'dual_fixed' ? num(price_sit_down) : null;
+  const pta = pricing_type === 'dual_fixed' ? num(price_takeaway) : null;
+  const pkg = pricing_type === 'per_kg'     ? num(price_per_kg)   : null;
+  const pun = pricing_type === 'unit'       ? num(price_unit)     : null;
+
+  try {
+    const out = await tx(async (c) => {
+      const r = (await c.query(
+        `INSERT INTO menu_items
+           (name, category, pricing_type, price_sit_down, price_takeaway, price_per_kg, price_unit, is_available, stock_register)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [name.trim(), category, pricing_type, psd, pta, pkg, pun,
+         is_available === undefined ? true : !!is_available,
+         stock_register || null])).rows[0];
+      await audit(c, req.user.id, 'menu_item_create', 'menu_items', r.id, { name: r.name, category, pricing_type });
+      return r;
+    });
+    res.status(201).json(out);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'A menu item with that name already exists.' });
+    res.status(400).json({ error: e.message });
+  }
+});
+
 module.exports = router;
