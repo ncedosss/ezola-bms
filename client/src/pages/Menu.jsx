@@ -8,6 +8,7 @@ export default function Menu() {
   const [items, setItems] = useState([]);
   const [err, setErr] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(null);
   const load = () => api('/api/menu').then(setItems).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
 
@@ -24,6 +25,14 @@ export default function Menu() {
       }});
       toast(`${m.name} saved.`, 'success'); load();
     } catch (e) { toast(e.message, 'error', 7000); }
+  };
+
+  const del = async (m) => {
+    try {
+      await api(`/api/menu/${m.id}`, { method: 'DELETE' });
+      toast(`${m.name} deleted.`, 'success');
+    } catch (e) { toast(e.message, 'error', 7000); }
+    finally { setConfirmDel(null); load(); }
   };
 
   const cats = [...new Set(items.map((m) => m.category))];
@@ -62,7 +71,17 @@ export default function Menu() {
                       {m.is_available ? 'on sale' : 'off'}
                     </button>
                   </td>
-                  <td><button className="btn sm" disabled={!m._dirty} onClick={() => save(m)}>Save</button></td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button className="btn sm" disabled={!m._dirty} onClick={() => save(m)}>Save</button>{' '}
+                    {confirmDel === m.id ? (
+                      <>
+                        <button className="btn sm red" onClick={() => del(m)}>Confirm</button>{' '}
+                        <button className="btn sm ghost" onClick={() => setConfirmDel(null)}>Cancel</button>
+                      </>
+                    ) : (
+                      <button className="btn sm ghost" onClick={() => setConfirmDel(m.id)}>Delete</button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

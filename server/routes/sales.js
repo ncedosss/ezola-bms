@@ -288,4 +288,23 @@ router.post('/menu', requireRole('owner'), async (req, res) => {
   }
 });
 
+// Owner-only: delete a menu item. Option groups + recipes cascade away.
+// Blocked by FK if the item appears in past orders — set it "off" instead.
+router.delete('/menu/:id', requireRole('owner'), async (req, res) => {
+  try {
+    const out = await tx(async (c) => {
+      const found = (await c.query(`SELECT name FROM menu_items WHERE id=$1`, [req.params.id])).rows[0];
+      if (!found) { const e = new Error('Menu item not found'); e.status = 404; throw e; }
+      await c.query(`DELETE FROM menu_items WHERE id=$1`, [req.params.id]);
+      await audit(c, req.user.id, 'menu_item_delete', 'menu_items', req.params.id, { name: found.name });
+      return found;
+    });
+    res.json({ ok: true, name: out.name });
+  } catch (e) {
+    if (e.code === '23503')
+      return res.status(409).json({ error: 'This item is used in past orders and can\'t be deleted. Set it to "off" instead.' });
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
 module.exports = router;
