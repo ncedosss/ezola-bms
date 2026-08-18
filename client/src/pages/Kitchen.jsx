@@ -6,7 +6,18 @@ export default function Kitchen() {
   const [orders, setOrders] = useState([]);
   const [err, setErr] = useState('');
   const load = () => api('/api/orders?kitchen=true').then(setOrders).catch((e) => setErr(e.message));
-  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    load();
+    let t = null;
+    const stop = () => { if (t) clearInterval(t); t = null; };
+    const start = () => { stop(); t = setInterval(load, 5000); };
+    const onVis = () => {
+      if (document.visibilityState === 'visible') { load(); start(); } else stop();
+    };
+    start();
+    document.addEventListener('visibilitychange', onVis);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
 
   const act = async (o, action) => {
     try { await api(`/api/orders/${o.id}/${action}`, { method: 'PATCH' }); load(); } catch (e) { setErr(e.message); }

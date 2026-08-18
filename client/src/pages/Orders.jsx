@@ -27,13 +27,27 @@ export default function Orders() {
   const [showNew, setShowNew] = useState(false);
   const [err, setErr] = useState('');
 
-  const load = () => {
-    api('/api/orders').then(setOrders).catch((e) => setErr(e.message));
+  // Fast-changing board data (polled often) vs reference data (rarely changes).
+  const loadOrders = () => api('/api/orders').then(setOrders).catch((e) => setErr(e.message));
+  const loadRefData = () => {
     api('/api/menu').then(setMenu).catch(() => {});
     api('/api/guesthouse/stays/active').then(setStays).catch(() => setStays([]));
     api('/api/guesthouse/cash-transfers').then(setTransfers).catch(() => {});
   };
-  useEffect(() => { load(); const t = setInterval(load, 20000); return () => clearInterval(t); }, []);
+  const load = () => { loadOrders(); loadRefData(); };
+
+  useEffect(() => {
+    load();
+    let fast = null, slow = null;
+    const stop = () => { if (fast) clearInterval(fast); if (slow) clearInterval(slow); fast = slow = null; };
+    const start = () => { stop(); fast = setInterval(loadOrders, 5000); slow = setInterval(loadRefData, 60000); };
+    const onVis = () => {
+      if (document.visibilityState === 'visible') { loadOrders(); start(); } else stop();
+    };
+    start();
+    document.addEventListener('visibilitychange', onVis);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
 
   const cols = [
     ['draft', 'Draft (unpaid)'],
