@@ -132,6 +132,7 @@ function NewMenuItemModal({ onClose, onSaved }) {
   const [price_per_kg, setKg] = useState('');
   const [price_unit, setUnit] = useState('');
   const [stock_register, setRegister] = useState('');
+  const [low_stock_threshold, setThreshold] = useState('');
   const [is_available, setAvailable] = useState(true);
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
@@ -151,6 +152,7 @@ function NewMenuItemModal({ onClose, onSaved }) {
         name: name.trim(), category, pricing_type,
         price_sit_down, price_takeaway, price_per_kg, price_unit,
         stock_register: stock_register || null, is_available,
+        low_stock_threshold: stock_register === 'shop' ? low_stock_threshold : null,
       }});
       onSaved(created);
     } catch (e) { setErr(e.message); setSaving(false); }
@@ -213,6 +215,18 @@ function NewMenuItemModal({ onClose, onSaved }) {
           <div className="sub" style={{ marginTop: 4 }}>
             Shop (Tuck Shop) is only offered for “Per unit / each” pricing — the Tuck Shop sells by unit price.
           </div>
+        )}
+
+        {stock_register === 'shop' && (
+          <>
+            <label>Low-stock alert threshold (optional)</label>
+            <input type="number" step="1" min="0" value={low_stock_threshold}
+              onChange={(e) => setThreshold(e.target.value)}
+              placeholder="e.g. 5 — alert when this many or fewer remain" />
+            <div className="sub" style={{ marginTop: 4 }}>
+              A matching shop stock item is created and linked automatically, starting at 0. Record purchases on the Stock page to add quantity; sales then deduct it and alert when it runs low.
+            </div>
+          </>
         )}
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>

@@ -246,42 +246,66 @@ router.get('/meal-credits', async (req, res) => {
   res.json(rows);
 });
 
-// Owner-only: create a brand-new menu item (mirrors Stock's "+ New item")
+// Owner-only: create a menu item. For a shop (Tuck Shop) item, also wire up its
+// stock — create/reuse a shop stock_items row and link it 1:1 via recipe_consumption —
+// so sales deduct, sold-out shows, and low-stock alerts fire.
 router.post('/menu', requireRole('owner'), async (req, res) => {
   const { name, category, pricing_type,
           price_sit_down, price_takeaway, price_per_kg, price_unit,
-          is_available, stock_register } = req.body;
+          is_available, stock_register, low_stock_threshold } = req.body;
 
   const CATEGORIES = ['plate','protein_standalone','braai_per_kg','drink','alcohol','snack','household','addon'];
   const PRICING    = ['dual_fixed','per_kg','unit'];
   const REGISTERS  = ['kitchen','shop','guest_house'];
 
-  if (!name || !name.trim())              return res.status(400).json({ error: 'Name is required' });
-  if (!CATEGORIES.includes(category))     return res.status(400).json({ error: 'Invalid category' });
-  if (!PRICING.includes(pricing_type))    return res.status(400).json({ error: 'Invalid pricing type' });
+  if (!name || !name.trim())           return res.status(400).json({ error: 'Name is required' });
+  if (!CATEGORIES.includes(category))  return res.status(400).json({ error: 'Invalid category' });
+  if (!PRICING.includes(pricing_type)) return res.status(400).json({ error: 'Invalid pricing type' });
   if (stock_register && !REGISTERS.includes(stock_register))
-                                          return res.status(400).json({ error: 'Invalid register' });
+                                       return res.status(400).json({ error: 'Invalid register' });
   if (stock_register === 'shop' && pricing_type !== 'unit')
-  return res.status(400).json({ error: 'Shop-register items must use “Per unit / each” pricing (the Tuck Shop sells by unit price).' });
+                                       return res.status(400).json({ error: 'Shop-register items must use “Per unit / each” pricing (the Tuck Shop sells by unit price).' });
 
-  // Keep only the price that matches the chosen pricing type; null the rest
   const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
   const psd = pricing_type === 'dual_fixed' ? num(price_sit_down) : null;
   const pta = pricing_type === 'dual_fixed' ? num(price_takeaway) : null;
   const pkg = pricing_type === 'per_kg'     ? num(price_per_kg)   : null;
   const pun = pricing_type === 'unit'       ? num(price_unit)     : null;
+  const thr = num(low_stock_threshold);
 
   try {
     const out = await tx(async (c) => {
-      const r = (await c.query(
+      const item = (await c.query(
         `INSERT INTO menu_items
            (name, category, pricing_type, price_sit_down, price_takeaway, price_per_kg, price_unit, is_available, stock_register)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
         [name.trim(), category, pricing_type, psd, pta, pkg, pun,
          is_available === undefined ? true : !!is_available,
          stock_register || null])).rows[0];
-      await audit(c, req.user.id, 'menu_item_create', 'menu_items', r.id, { name: r.name, category, pricing_type });
-      return r;
+      await audit(c, req.user.id, 'menu_item_create', 'menu_items', item.id, { name: item.name, category, pricing_type });
+
+      // Shop items get a tracked stock row + 1:1 link so the Tuck Shop can deduct & alert.
+      if (stock_register === 'shop') {
+        const stockRow = (await c.query(
+          `INSERT INTO stock_items (register, name, category, unit, current_quantity, low_stock_threshold)
+           VALUES ('shop', $1, $2, 'unit', 0, $3)
+           ON CONFLICT (register, name)
+           DO UPDATE SET low_stock_threshold = COALESCE(EXCLUDED.low_stock_threshold, stock_items.low_stock_threshold),
+                         updated_at = now()
+           RETURNING id`,
+          [item.name, category, thr])).rows[0];
+
+        await c.query(
+          `INSERT INTO recipe_consumption (menu_item_id, menu_option_id, stock_item_id, quantity_per_unit)
+           SELECT $1, NULL, $2, 1
+           WHERE NOT EXISTS (
+             SELECT 1 FROM recipe_consumption WHERE menu_item_id = $1 AND stock_item_id = $2
+           )`,
+          [item.id, stockRow.id]);
+
+        await audit(c, req.user.id, 'menu_stock_link', 'stock_items', stockRow.id, { menu_item_id: item.id, name: item.name });
+      }
+      return item;
     });
     res.status(201).json(out);
   } catch (e) {
