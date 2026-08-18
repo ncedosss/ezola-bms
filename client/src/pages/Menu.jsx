@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
 import { useToast } from '../components/Toast.jsx';
 
-// Owner-only: set the real prices, flip availability, and add brand-new items.
+// Owner-only: set prices, flip availability, add kitchen/add-on items, and price shop stock.
 export default function Menu() {
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [err, setErr] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [showShop, setShowShop] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
   const load = () => api('/api/menu').then(setItems).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
@@ -48,7 +49,10 @@ export default function Menu() {
           <h1>Menu &amp; Prices</h1>
           <div className="sub">Owner only. Changes apply to new orders immediately and are audit-logged.</div>
         </div>
-        <button className="btn green" onClick={() => setShowNew(true)}>+ New menu item</button>
+        <div className="btnrow" style={{ gap: 8 }}>
+          <button className="btn green" onClick={() => setShowShop(true)}>+ Price shop item</button>
+          <button className="btn ghost" onClick={() => setShowNew(true)}>+ New menu item</button>
+        </div>
       </div>
       {err && <div className="err" onClick={() => setErr('')}>{err}</div>}
       {cats.map((cat) => (
@@ -89,6 +93,12 @@ export default function Menu() {
         </div>
       ))}
 
+      {showShop && (
+        <ShopStockPricingModal
+          onClose={() => setShowShop(false)}
+          onSaved={(created) => { setShowShop(false); toast(`${created.name} priced and added to the Tuck Shop.`, 'success'); load(); }}
+        />
+      )}
       {showNew && (
         <NewMenuItemModal
           onClose={() => setShowNew(false)}
@@ -99,14 +109,90 @@ export default function Menu() {
   );
 }
 
-const CATEGORIES = [
+/* ---------------- Shop pricing: stock-first, priced-only ---------------- */
+function ShopStockPricingModal({ onClose, onSaved }) {
+  const [stock, setStock] = useState(null);          // null = loading
+  const [category, setCategory] = useState('');
+  const [stockItemId, setStockItemId] = useState('');
+  const [price_unit, setPrice] = useState('');
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api('/api/menu/shop-stock')
+      .then((rows) => {
+        setStock(rows);
+        const first = [...new Set(rows.map((r) => r.category || 'uncategorised'))][0];
+        if (first) setCategory(first);
+      })
+      .catch((e) => { setErr(e.message); setStock([]); });
+  }, []);
+
+  const cats = stock ? [...new Set(stock.map((r) => r.category || 'uncategorised'))].sort() : [];
+  const inCat = stock ? stock.filter((r) => (r.category || 'uncategorised') === category) : [];
+  const chosen = stock ? stock.find((r) => r.id === stockItemId) : null;
+  const canSave = stockItemId && Number(price_unit) > 0 && !saving;
+
+  const submit = async () => {
+    setErr(''); setSaving(true);
+    try {
+      const created = await api('/api/menu/from-stock', { method: 'POST',
+        body: { stock_item_id: stockItemId, price_unit } });
+      onSaved(created);
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Price a shop item</h2>
+        <div className="sub">Pick a shop stock item and give it a selling price. It appears in the Tuck Shop only once priced.</div>
+        {err && <div className="err">{err}</div>}
+
+        {stock === null && <div className="sub">Loading shop stock…</div>}
+
+        {stock && stock.length === 0 && (
+          <div className="ok">Every shop stock item already has a price, or none exist yet. Add the item on the Stock page (shop register) first, then price it here.</div>
+        )}
+
+        {stock && stock.length > 0 && (
+          <>
+            <label>Category</label>
+            <select value={category} onChange={(e) => { setCategory(e.target.value); setStockItemId(''); }}>
+              {cats.map((c) => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
+            </select>
+
+            <label>Stock item *</label>
+            <select value={stockItemId} onChange={(e) => setStockItemId(e.target.value)}>
+              <option value="">Choose…</option>
+              {inCat.map((r) => <option key={r.id} value={r.id}>{r.name} (on hand: {Number(r.current_quantity)})</option>)}
+            </select>
+
+            <label>Selling price each (R) *</label>
+            <input type="number" step="0.01" min="0" value={price_unit} onChange={(e) => setPrice(e.target.value)} />
+
+            {chosen && (
+              <div className="sub" style={{ marginTop: 4 }}>
+                Pricing “{chosen.name}”. Each sale deducts one from its shop stock, and it shows sold-out at zero.
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="btnrow" style={{ marginTop: 16, justifyContent: 'space-between' }}>
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn green" disabled={!canSave} onClick={submit}>{saving ? 'Saving…' : 'Add to menu'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Kitchen / add-on items (menu-first, no shop) ---------------- */
+const MENU_CATEGORIES = [
   ['plate', 'Plate (meal)'],
   ['protein_standalone', 'Protein (standalone)'],
   ['braai_per_kg', 'Braai (per kg)'],
-  ['drink', 'Drink'],
-  ['alcohol', 'Alcohol'],
-  ['snack', 'Snack'],
-  ['household', 'Household'],
   ['addon', 'Add-on'],
 ];
 
@@ -119,30 +205,26 @@ const PRICING = [
 const REGISTERS = [
   ['', 'Not linked'],
   ['kitchen', 'Kitchen'],
-  ['shop', 'Shop'],
   ['guest_house', 'Guest house'],
 ];
 
 function NewMenuItemModal({ onClose, onSaved }) {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('drink');
-  const [pricing_type, setPricing] = useState('unit');
+  const [category, setCategory] = useState('plate');
+  const [pricing_type, setPricing] = useState('dual_fixed');
   const [price_sit_down, setSit] = useState('');
   const [price_takeaway, setTake] = useState('');
   const [price_per_kg, setKg] = useState('');
   const [price_unit, setUnit] = useState('');
   const [stock_register, setRegister] = useState('');
-  const [low_stock_threshold, setThreshold] = useState('');
   const [is_available, setAvailable] = useState(true);
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Which price fields are required for the chosen pricing type
   const priceReady =
     pricing_type === 'dual_fixed' ? (price_sit_down !== '' && price_takeaway !== '') :
     pricing_type === 'per_kg'     ? (price_per_kg !== '') :
                                     (price_unit !== '');
-
   const canSave = name.trim() !== '' && priceReady && !saving;
 
   const submit = async () => {
@@ -152,7 +234,6 @@ function NewMenuItemModal({ onClose, onSaved }) {
         name: name.trim(), category, pricing_type,
         price_sit_down, price_takeaway, price_per_kg, price_unit,
         stock_register: stock_register || null, is_available,
-        low_stock_threshold: stock_register === 'shop' ? low_stock_threshold : null,
       }});
       onSaved(created);
     } catch (e) { setErr(e.message); setSaving(false); }
@@ -162,7 +243,7 @@ function NewMenuItemModal({ onClose, onSaved }) {
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>New menu item</h2>
-        <div className="sub">Owner only. The item appears on the menu and becomes orderable immediately.</div>
+        <div className="sub">For kitchen &amp; add-on items. Shop drinks/snacks are added via “Price shop item”.</div>
         {err && <div className="err">{err}</div>}
 
         <label>Name *</label>
@@ -172,15 +253,12 @@ function NewMenuItemModal({ onClose, onSaved }) {
           <div>
             <label>Category *</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {CATEGORIES.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
+              {MENU_CATEGORIES.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
             </select>
           </div>
           <div>
             <label>Pricing *</label>
-            <select value={pricing_type} onChange={(e) => {
-              const v = e.target.value; setPricing(v);
-              if (v !== 'unit' && stock_register === 'shop') setRegister('');
-            }}>
+            <select value={pricing_type} onChange={(e) => setPricing(e.target.value)}>
               {PRICING.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
             </select>
           </div>
@@ -207,27 +285,8 @@ function NewMenuItemModal({ onClose, onSaved }) {
 
         <label>Stock register (optional)</label>
         <select value={stock_register} onChange={(e) => setRegister(e.target.value)}>
-          {REGISTERS
-            .filter(([v]) => v !== 'shop' || pricing_type === 'unit')
-            .map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
+          {REGISTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
         </select>
-        {pricing_type !== 'unit' && (
-          <div className="sub" style={{ marginTop: 4 }}>
-            Shop (Tuck Shop) is only offered for “Per unit / each” pricing — the Tuck Shop sells by unit price.
-          </div>
-        )}
-
-        {stock_register === 'shop' && (
-          <>
-            <label>Low-stock alert threshold (optional)</label>
-            <input type="number" step="1" min="0" value={low_stock_threshold}
-              onChange={(e) => setThreshold(e.target.value)}
-              placeholder="e.g. 5 — alert when this many or fewer remain" />
-            <div className="sub" style={{ marginTop: 4 }}>
-              A matching shop stock item is created and linked automatically, starting at 0. Record purchases on the Stock page to add quantity; sales then deduct it and alert when it runs low.
-            </div>
-          </>
-        )}
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
           <input type="checkbox" checked={is_available} onChange={(e) => setAvailable(e.target.checked)} style={{ width: 'auto' }} />

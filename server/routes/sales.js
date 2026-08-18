@@ -263,8 +263,8 @@ router.post('/menu', requireRole('owner'), async (req, res) => {
   if (!PRICING.includes(pricing_type)) return res.status(400).json({ error: 'Invalid pricing type' });
   if (stock_register && !REGISTERS.includes(stock_register))
                                        return res.status(400).json({ error: 'Invalid register' });
-  if (stock_register === 'shop' && pricing_type !== 'unit')
-                                       return res.status(400).json({ error: 'Shop-register items must use “Per unit / each” pricing (the Tuck Shop sells by unit price).' });
+  if (stock_register === 'shop')
+    return res.status(400).json({ error: 'Add shop items from stock: create the item on the Stock page, then price it here via “Price shop item”.' });
 
   const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
   const psd = pricing_type === 'dual_fixed' ? num(price_sit_down) : null;
@@ -311,6 +311,53 @@ router.post('/menu', requireRole('owner'), async (req, res) => {
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'A menu item with that name already exists.' });
     res.status(400).json({ error: e.message });
+  }
+});
+
+// Owner-only: shop stock items that don't yet have a menu price (the pricing picker source).
+router.get('/menu/shop-stock', requireRole('owner'), async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT si.id, si.name, si.category, si.current_quantity, si.low_stock_threshold
+     FROM stock_items si
+     WHERE si.register = 'shop'
+       AND NOT EXISTS (SELECT 1 FROM recipe_consumption rc WHERE rc.stock_item_id = si.id)
+     ORDER BY si.category NULLS LAST, si.name`);
+  res.json(rows);
+});
+
+// Owner-only: give an existing shop stock item a menu price. Creates the menu item + 1:1 link.
+const STOCK_TO_MENU_CAT = {
+  alcohol: 'alcohol', household: 'household', snacks: 'snack',
+  soft_drinks: 'drink', energy_drinks: 'drink', groceries: 'snack',
+};
+router.post('/menu/from-stock', requireRole('owner'), async (req, res) => {
+  const { stock_item_id, price_unit } = req.body;
+  const price = (price_unit === '' || price_unit == null) ? null : Number(price_unit);
+  if (!stock_item_id) return res.status(400).json({ error: 'Pick a stock item' });
+  if (!(price > 0))    return res.status(400).json({ error: 'Enter a price greater than 0' });
+  try {
+    const out = await tx(async (c) => {
+      const si = (await c.query(`SELECT * FROM stock_items WHERE id=$1`, [stock_item_id])).rows[0];
+      if (!si) { const e = new Error('Stock item not found'); e.status = 404; throw e; }
+      if (si.register !== 'shop') { const e = new Error('Only shop items can be priced this way'); e.status = 400; throw e; }
+      const linked = (await c.query(`SELECT 1 FROM recipe_consumption WHERE stock_item_id=$1 LIMIT 1`, [stock_item_id])).rows[0];
+      if (linked) { const e = new Error('That stock item is already on the menu'); e.status = 409; throw e; }
+
+      const menuCat = STOCK_TO_MENU_CAT[si.category] || 'snack';
+      const item = (await c.query(
+        `INSERT INTO menu_items (name, category, pricing_type, price_unit, is_available, stock_register)
+         VALUES ($1,$2,'unit',$3,TRUE,'shop') RETURNING *`,
+        [si.name, menuCat, price])).rows[0];
+      await c.query(
+        `INSERT INTO recipe_consumption (menu_item_id, menu_option_id, stock_item_id, quantity_per_unit)
+         VALUES ($1, NULL, $2, 1)`, [item.id, si.id]);
+      await audit(c, req.user.id, 'menu_item_price_from_stock', 'menu_items', item.id, { name: si.name, stock_item_id: si.id, price });
+      return item;
+    });
+    res.status(201).json(out);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'A menu item with that name already exists.' });
+    res.status(e.status || 400).json({ error: e.message });
   }
 });
 
