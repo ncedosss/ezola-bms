@@ -261,6 +261,8 @@ router.post('/menu', requireRole('owner'), async (req, res) => {
   if (!PRICING.includes(pricing_type))    return res.status(400).json({ error: 'Invalid pricing type' });
   if (stock_register && !REGISTERS.includes(stock_register))
                                           return res.status(400).json({ error: 'Invalid register' });
+  if (stock_register === 'shop' && pricing_type !== 'unit')
+  return res.status(400).json({ error: 'Shop-register items must use “Per unit / each” pricing (the Tuck Shop sells by unit price).' });
 
   // Keep only the price that matches the chosen pricing type; null the rest
   const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v));

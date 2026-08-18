@@ -175,7 +175,10 @@ function NewMenuItemModal({ onClose, onSaved }) {
           </div>
           <div>
             <label>Pricing *</label>
-            <select value={pricing_type} onChange={(e) => setPricing(e.target.value)}>
+            <select value={pricing_type} onChange={(e) => {
+              const v = e.target.value; setPricing(v);
+              if (v !== 'unit' && stock_register === 'shop') setRegister('');
+            }}>
               {PRICING.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
             </select>
           </div>
@@ -202,8 +205,15 @@ function NewMenuItemModal({ onClose, onSaved }) {
 
         <label>Stock register (optional)</label>
         <select value={stock_register} onChange={(e) => setRegister(e.target.value)}>
-          {REGISTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
+          {REGISTERS
+            .filter(([v]) => v !== 'shop' || pricing_type === 'unit')
+            .map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
         </select>
+        {pricing_type !== 'unit' && (
+          <div className="sub" style={{ marginTop: 4 }}>
+            Shop (Tuck Shop) is only offered for “Per unit / each” pricing — the Tuck Shop sells by unit price.
+          </div>
+        )}
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
           <input type="checkbox" checked={is_available} onChange={(e) => setAvailable(e.target.checked)} style={{ width: 'auto' }} />
