@@ -66,8 +66,8 @@ export default function Orders() {
         <button className="btn green" onClick={() => setShowNew(true)}>+ New order</button>
       </div>
       {err && <div className="err" onClick={() => setErr('')}>{err}</div>}
+      <div className="sub" style={{ marginBottom: 6 }}>Taking payment at:</div>
       <div className="tabs">
-        <span className="sub" style={{ alignSelf: 'center', marginRight: 6 }}>Taking payment at:</span>
         <button className={till === 'restaurant' ? 'on' : ''} onClick={() => setTill('restaurant')}>Restaurant till</button>
         {!isWaiter && (
           <button className={till === 'guest_house' ? 'on' : ''} onClick={() => setTill('guest_house')}>Guest house till</button>
