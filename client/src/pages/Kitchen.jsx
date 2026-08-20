@@ -1,23 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // S15 - kitchen queue: only PAID slips appear (the no-invoice-no-meal rule). Card-paid meal credits flagged.
 export default function Kitchen() {
   const [orders, setOrders] = useState([]);
   const [err, setErr] = useState('');
   const load = () => api('/api/orders?kitchen=true').then(setOrders).catch((e) => setErr(e.message));
-  useEffect(() => {
-    load();
-    let t = null;
-    const stop = () => { if (t) clearInterval(t); t = null; };
-    const start = () => { stop(); t = setInterval(load, 5000); };
-    const onVis = () => {
-      if (document.visibilityState === 'visible') { load(); start(); } else stop();
-    };
-    start();
-    document.addEventListener('visibilitychange', onVis);
-    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
-  }, []);
+  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
 
   const act = async (o, action) => {
     try { await api(`/api/orders/${o.id}/${action}`, { method: 'PATCH' }); load(); } catch (e) { setErr(e.message); }
@@ -53,11 +43,11 @@ export default function Kitchen() {
       <div className="board" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <div className="col">
           <h3>Paid - waiting ({queue.length})</h3>
-          {queue.map((o) => <Card key={o.id} o={o}><button className="btn amber sm" onClick={() => act(o, 'start')}>Start preparing</button></Card>)}
+          {queue.map((o) => <Card key={o.id} o={o}><AsyncButton className="btn amber sm" onClick={() => act(o, 'start')}>Start preparing</AsyncButton></Card>)}
         </div>
         <div className="col">
           <h3>Preparing ({cooking.length})</h3>
-          {cooking.map((o) => <Card key={o.id} o={o}><button className="btn green sm" onClick={() => act(o, 'serve')}>Served</button></Card>)}
+          {cooking.map((o) => <Card key={o.id} o={o}><AsyncButton className="btn green sm" onClick={() => act(o, 'serve')}>Served</AsyncButton></Card>)}
         </div>
       </div>
     </>

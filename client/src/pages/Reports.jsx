@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 const C = { green: '#63BE7A', sage: '#8FB7A7', ink: '#20261F', line: '#EAEEEA' };
 

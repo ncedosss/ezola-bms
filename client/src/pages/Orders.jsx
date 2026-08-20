@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
 import { useToast } from '../components/Toast.jsx';
 import { useAuth } from '../App.jsx';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // 5× 4-seater (1-5), 3× 8-seater (6-8), 1× 3-couch (9)
 const TABLES = [
@@ -27,27 +28,13 @@ export default function Orders() {
   const [showNew, setShowNew] = useState(false);
   const [err, setErr] = useState('');
 
-  // Fast-changing board data (polled often) vs reference data (rarely changes).
-  const loadOrders = () => api('/api/orders').then(setOrders).catch((e) => setErr(e.message));
-  const loadRefData = () => {
+  const load = () => {
+    api('/api/orders').then(setOrders).catch((e) => setErr(e.message));
     api('/api/menu').then(setMenu).catch(() => {});
     api('/api/guesthouse/stays/active').then(setStays).catch(() => setStays([]));
     api('/api/guesthouse/cash-transfers').then(setTransfers).catch(() => {});
   };
-  const load = () => { loadOrders(); loadRefData(); };
-
-  useEffect(() => {
-    load();
-    let fast = null, slow = null;
-    const stop = () => { if (fast) clearInterval(fast); if (slow) clearInterval(slow); fast = slow = null; };
-    const start = () => { stop(); fast = setInterval(loadOrders, 5000); slow = setInterval(loadRefData, 60000); };
-    const onVis = () => {
-      if (document.visibilityState === 'visible') { loadOrders(); start(); } else stop();
-    };
-    start();
-    document.addEventListener('visibilitychange', onVis);
-    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
-  }, []);
+  useEffect(() => { load(); const t = setInterval(load, 20000); return () => clearInterval(t); }, []);
 
   const cols = [
     ['draft', 'Draft (unpaid)'],
@@ -93,7 +80,7 @@ export default function Orders() {
           {unconfirmed.map((t) => (
             <div key={t.id} className="btnrow" style={{ alignItems: 'center', marginBottom: 6 }}>
               <span>{R(t.amount)} - room {t.room_number || '?'} ({t.guest_name || 'guest'}), carried by {t.carried_by_name}</span>
-              <button className="btn green sm" onClick={() => confirmWalk(t)}>Confirm received</button>
+              <AsyncButton className="btn green sm" onClick={() => confirmWalk(t)}>Confirm received</AsyncButton>
             </div>
           ))}
         </div>
@@ -121,10 +108,10 @@ export default function Orders() {
                 <div><b>{R(o.total_amount)}</b> · {o.service_type.replace('_', '-')}</div>
                 {st === 'draft' && (
                   <div className="btnrow" style={{ marginTop: 8 }}>
-                    {canTakePayment && <button className="btn green sm" onClick={() => pay(o, 'cash')}>Paid cash</button>}
-                    {canTakePayment && <button className="btn green sm" onClick={() => pay(o, 'card')}>Paid card</button>}
-                    {canTakePayment && o.channel === 'uber' && <button className="btn sm" onClick={() => pay(o, 'uber_eats')}>Uber Eats (online)</button>}
-                    <button className="btn ghost sm" onClick={() => cancel(o)}>Cancel</button>
+                    {canTakePayment && <AsyncButton className="btn green sm" onClick={() => pay(o, 'cash')}>Paid cash</AsyncButton>}
+                    {canTakePayment && <AsyncButton className="btn green sm" onClick={() => pay(o, 'card')}>Paid card</AsyncButton>}
+                    {canTakePayment && o.channel === 'uber' && <AsyncButton className="btn sm" onClick={() => pay(o, 'uber_eats')}>Uber Eats (online)</AsyncButton>}
+                    <AsyncButton className="btn ghost sm" onClick={() => cancel(o)}>Cancel</AsyncButton>
                   </div>
                 )}
                 {st !== 'draft' && isManager && (
@@ -315,9 +302,9 @@ function NewOrder({ menu, stays, onClose }) {
           <b>Total {R(total)}</b>
           <div className="btnrow">
             <button className="btn ghost" onClick={onClose}>Cancel</button>
-            <button className="btn green" disabled={!lines.length || (channel === 'room' && !stayId) || (channel === 'restaurant' && !tableNumber)} onClick={submit}>
+            <AsyncButton className="btn green" disabled={!lines.length || (channel === 'room' && !stayId) || (channel === 'restaurant' && !tableNumber)} onClick={submit}>
               Take an order
-            </button>
+            </AsyncButton>
           </div>
         </div>
       </div>
@@ -345,7 +332,7 @@ function VoidModal({ order, onDone, toast }) {
         <textarea rows="2" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. keyed wrong item, customer cancelled before cooking" />
         <div className="btnrow" style={{ marginTop: 14, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onDone}>Cancel</button>
-          <button className="btn red" disabled={!reason.trim()} onClick={submit}>Void order</button>
+          <AsyncButton className="btn red" disabled={!reason.trim()} onClick={submit}>Void order</AsyncButton>
         </div>
       </div>
     </div>

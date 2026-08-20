@@ -112,6 +112,15 @@ tr:last-child td { border-bottom:none; }
 .btn.sm { min-height:36px; padding:0 12px; font-size:13px; border-radius:8px; }
 .btn:disabled { opacity:.4; cursor:not-allowed; }
 .btnrow { display:flex; gap:8px; flex-wrap:wrap; }
+/* Async action buttons: spinner while the request is in flight */
+.btn-spinner {
+  width:14px; height:14px; margin-right:8px; vertical-align:-2px;
+  display:inline-block; border-radius:50%;
+  border:2px solid currentColor; border-top-color:transparent;
+  animation:btn-spin .6s linear infinite;
+}
+@keyframes btn-spin { to { transform:rotate(360deg); } }
+.btn.busy:disabled { opacity:.9; cursor:progress; }
 
 /* ---------- Forms ---------- */
 input, select, textarea {

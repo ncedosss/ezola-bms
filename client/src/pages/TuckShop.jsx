@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // S08 - quick unit sales, pay instantly at the shop counter (restaurant till), no kitchen
 export default function TuckShop() {
@@ -76,8 +77,8 @@ export default function TuckShop() {
           </tbody></table>
           <div style={{ margin: '12px 0', fontSize: 18 }}><b>Total {R(total)}</b></div>
           <div className="btnrow">
-            <button className="btn green" disabled={!lines.length} onClick={() => sell('cash')}>Cash</button>
-            <button className="btn green" disabled={!lines.length} onClick={() => sell('card')}>Card</button>
+            <AsyncButton className="btn green" disabled={!lines.length} onClick={() => sell('cash')}>Cash</AsyncButton>
+            <AsyncButton className="btn green" disabled={!lines.length} onClick={() => sell('card')}>Card</AsyncButton>
             <button className="btn ghost" disabled={!lines.length} onClick={() => setCart({})}>Clear</button>
           </div>
         </div>

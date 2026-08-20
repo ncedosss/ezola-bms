@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
 import { useAuth } from '../App.jsx';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // S09 register tabs + S10 purchase capture + S11 adjustments + owner approval queue
 export default function Stock() {
@@ -57,8 +58,8 @@ export default function Stock() {
                 <td className="sub">{a.reason} — {a.submitted_by_name}</td>
                 {user.role === 'owner' && (
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="btn green sm" onClick={() => decide(a, 'approved')}>Approve</button>{' '}
-                    <button className="btn red sm" onClick={() => decide(a, 'rejected')}>Reject</button>
+                    <AsyncButton className="btn green sm" onClick={() => decide(a, 'approved')}>Approve</AsyncButton>{' '}
+                    <AsyncButton className="btn red sm" onClick={() => decide(a, 'rejected')}>Reject</AsyncButton>
                   </td>
                 )}
               </tr>
@@ -153,7 +154,7 @@ function PurchaseModal({ item, onClose }) {
         <input value={supplier_note} onChange={(e) => setNote(e.target.value)} />
         <div className="btnrow" style={{ marginTop: 14, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn green" disabled={!(quantity > 0) || total_cost === ''} onClick={submit}>Add to stock</button>
+          <AsyncButton className="btn green" disabled={!(quantity > 0) || total_cost === ''} onClick={submit}>Add to stock</AsyncButton>
         </div>
       </div>
     </div>
@@ -207,7 +208,7 @@ function TransferModal({ item, onClose }) {
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. kitchen ran out mid-service" />
         <div className="btnrow" style={{ marginTop: 14, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn green" disabled={!toId || !(quantity > 0)} onClick={submit}>Record transfer</button>
+          <AsyncButton className="btn green" disabled={!toId || !(quantity > 0)} onClick={submit}>Record transfer</AsyncButton>
         </div>
       </div>
     </div>
@@ -238,7 +239,7 @@ function AdjustModal({ item, onClose }) {
         <textarea rows="2" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. 2kg vegetables spoiled - fridge failure" />
         <div className="btnrow" style={{ marginTop: 14, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn amber" disabled={!quantity_change || !reason.trim()} onClick={submit}>Submit for approval</button>
+          <AsyncButton className="btn amber" disabled={!quantity_change || !reason.trim()} onClick={submit}>Submit for approval</AsyncButton>
         </div>
       </div>
     </div>
@@ -288,7 +289,7 @@ function EditItemModal({ item, onClose }) {
         </div>
         <div className="btnrow" style={{ marginTop: 14, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn green" disabled={!f.name.trim()} onClick={submit}>Save</button>
+          <AsyncButton className="btn green" disabled={!f.name.trim()} onClick={submit}>Save</AsyncButton>
         </div>
       </div>
     </div>
@@ -345,7 +346,7 @@ function NewItemModal({ register, categories = [], onClose }) {
         </div>
         <div className="btnrow" style={{ marginTop: 14, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn green" disabled={!f.name.trim()} onClick={submit}>Create item</button>
+          <AsyncButton className="btn green" disabled={!f.name.trim()} onClick={submit}>Create item</AsyncButton>
         </div>
       </div>
     </div>

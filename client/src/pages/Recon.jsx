@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // S12 - end of day: system expectation vs blind count, per till; variance computed server-side
 export default function Recon() {
@@ -77,9 +78,9 @@ export default function Recon() {
           </div>
           <label>Notes</label>
           <textarea rows="2" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="anything unusual today" />
-          <button className="btn green" style={{ marginTop: 12 }} disabled={counted_cash === '' || counted_card === ''} onClick={submit}>
+          <AsyncButton className="btn green" style={{ marginTop: 12 }} disabled={counted_cash === '' || counted_card === ''} onClick={submit}>
             Submit {till.replace('_', ' ')} count
-          </button>
+          </AsyncButton>
           {result && (
             <div className={Math.abs(result.cash_variance) >= 50 || Math.abs(result.card_variance) >= 50 ? 'err' : 'ok'} style={{ marginTop: 10 }}>
               Cash variance {R(result.cash_variance)} · card variance {R(result.card_variance)}

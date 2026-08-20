@@ -1,301 +1,125 @@
 import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
-import { useToast } from '../components/Toast.jsx';
+import { useAuth } from '../App.jsx';
+import AsyncButton from '../components/AsyncButton.jsx';
 
-// Owner-only: set prices, flip availability, add kitchen/add-on items, and price shop stock.
-export default function Menu() {
-  const toast = useToast();
-  const [items, setItems] = useState([]);
+// Petty cash: standalone tuck-shop float. Top-ups in, expenses out, counts for control.
+export default function Petty() {
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const [modal, setModal] = useState(null); // 'expense' | 'topup' | 'count'
   const [err, setErr] = useState('');
-  const [showNew, setShowNew] = useState(false);
-  const [showShop, setShowShop] = useState(false);
-  const [confirmDel, setConfirmDel] = useState(null);
-  const load = () => api('/api/menu').then(setItems).catch((e) => setErr(e.message));
+
+  const canTopup = ['owner', 'office_manager', 'facility_manager'].includes(user.role);
+  const canSpend = ['owner', 'office_manager', 'facility_manager', 'shop_attendant'].includes(user.role);
+  const canCount = ['owner', 'office_manager'].includes(user.role);
+
+  const load = () => api('/api/petty').then(setData).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
 
-  const setField = (id, field, value) =>
-    setItems(items.map((m) => (m.id === id ? { ...m, [field]: value, _dirty: true } : m)));
+  if (err) return <div className="err" onClick={() => setErr('')}>{err}</div>;
+  if (!data) return <div className="loading">Loading…</div>;
 
-  const save = async (m) => {
-    try {
-      const num = (v) => (v === '' || v === null ? null : Number(v));
-      await api(`/api/menu/${m.id}`, { method: 'PATCH', body: {
-        price_sit_down: num(m.price_sit_down), price_takeaway: num(m.price_takeaway),
-        price_per_kg: num(m.price_per_kg), price_unit: num(m.price_unit),
-        is_available: m.is_available,
-      }});
-      toast(`${m.name} saved.`, 'success'); load();
-    } catch (e) { toast(e.message, 'error', 7000); }
-  };
-
-  const del = async (m) => {
-    try {
-      await api(`/api/menu/${m.id}`, { method: 'DELETE' });
-      toast(`${m.name} deleted.`, 'success');
-    } catch (e) { toast(e.message, 'error', 7000); }
-    finally { setConfirmDel(null); load(); }
-  };
-
-  const cats = [...new Set(items.map((m) => m.category))];
-  const P = ({ m, field }) => (
-    <input type="number" step="0.01" style={{ width: 90 }} value={m[field] ?? ''}
-      onChange={(e) => setField(m.id, field, e.target.value)} />
-  );
+  const low = data.balance <= data.low_threshold;
+  const typeLabel = { topup: 'Top-up', expense: 'Expense', count: 'Count' };
 
   return (
     <>
-      <div className="btnrow" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <h1>Menu &amp; Prices</h1>
-          <div className="sub">Owner only. Changes apply to new orders immediately and are audit-logged.</div>
-        </div>
-        <div className="btnrow" style={{ gap: 8 }}>
-          <button className="btn green" onClick={() => setShowShop(true)}>+ Price shop item</button>
-          <button className="btn ghost" onClick={() => setShowNew(true)}>+ New menu item</button>
+      <h1>Petty Cash</h1>
+      <div className="sub">The tuck-shop float for small out-of-pocket buys (transport, sundries not in stock). Every movement is traced.</div>
+
+      <div className="panel" style={{ marginBottom: 14, borderLeft: `4px solid ${low ? '#E0685E' : '#2e7d46'}` }}>
+        <div style={{ fontSize: 26 }}><b>Balance: {R(data.balance)}</b>
+          {low && <span className="badge red" style={{ marginLeft: 10 }}>LOW - top up</span>}</div>
+        <div className="btnrow" style={{ marginTop: 12 }}>
+          {canSpend && <button className="btn green" onClick={() => setModal('expense')}>Record expense</button>}
+          {canTopup && <button className="btn" onClick={() => setModal('topup')}>Top up float</button>}
+          {canCount && <button className="btn ghost" onClick={() => setModal('count')}>Count tin</button>}
         </div>
       </div>
-      {err && <div className="err" onClick={() => setErr('')}>{err}</div>}
-      {cats.map((cat) => (
-        <div className="panel" style={{ marginBottom: 14 }} key={cat}>
-          <h2>{cat.replace(/_/g, ' ')}</h2>
-          <table>
-            <thead><tr><th>Item</th><th>Pricing</th><th>Available</th><th></th></tr></thead>
-            <tbody>
-              {items.filter((m) => m.category === cat).map((m) => (
-                <tr key={m.id}>
-                  <td>{m.name}</td>
-                  <td>
-                    {m.pricing_type === 'dual_fixed' && <>sit-down <P m={m} field="price_sit_down" /> takeaway <P m={m} field="price_takeaway" /></>}
-                    {m.pricing_type === 'per_kg' && <>per kg <P m={m} field="price_per_kg" /></>}
-                    {m.pricing_type === 'unit' && <>each <P m={m} field="price_unit" /></>}
-                  </td>
-                  <td>
-                    <button className={`btn sm ${m.is_available ? 'green' : 'red'}`}
-                      onClick={() => setField(m.id, 'is_available', !m.is_available)}>
-                      {m.is_available ? 'on sale' : 'off'}
-                    </button>
-                  </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="btn sm" disabled={!m._dirty} onClick={() => save(m)}>Save</button>{' '}
-                    {confirmDel === m.id ? (
-                      <>
-                        <button className="btn sm red" onClick={() => del(m)}>Confirm</button>{' '}
-                        <button className="btn sm ghost" onClick={() => setConfirmDel(null)}>Cancel</button>
-                      </>
-                    ) : (
-                      <button className="btn sm ghost" onClick={() => setConfirmDel(m.id)}>Delete</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
 
-      {showShop && (
-        <ShopStockPricingModal
-          onClose={() => setShowShop(false)}
-          onSaved={(created) => { setShowShop(false); toast(`${created.name} priced and added to the Tuck Shop.`, 'success'); load(); }}
-        />
-      )}
-      {showNew && (
-        <NewMenuItemModal
-          onClose={() => setShowNew(false)}
-          onSaved={(created) => { setShowNew(false); toast(`${created.name} added.`, 'success'); load(); }}
-        />
-      )}
+      <div className="panel">
+        <h2>Ledger</h2>
+        <table>
+          <thead><tr><th>When</th><th>Type</th><th style={{ textAlign: 'right' }}>Amount</th><th>Reason / note</th><th>By</th></tr></thead>
+          <tbody>
+            {data.entries.map((e) => (
+              <tr key={e.id}>
+                <td className="sub" style={{ whiteSpace: 'nowrap' }}>{new Date(e.created_at).toLocaleString('en-ZA')}</td>
+                <td>{typeLabel[e.type] || e.type}</td>
+                <td style={{ textAlign: 'right', color: e.type === 'expense' ? '#E0685E' : e.type === 'topup' ? '#2e7d46' : 'inherit' }}>
+                  {e.type === 'expense' ? `- ${R(e.amount)}` : e.type === 'topup' ? `+ ${R(e.amount)}` : ''}
+                  {e.type === 'count' && <span className="sub">counted {R(e.counted_amount)} · var {R(e.variance)}</span>}
+                </td>
+                <td className="sub">{e.description || (e.receipt_ref ? `receipt ${e.receipt_ref}` : '—')}
+                  {e.receipt_ref && e.description ? ` · receipt ${e.receipt_ref}` : ''}</td>
+                <td className="sub">{e.created_by_name}</td>
+              </tr>
+            ))}
+            {data.entries.length === 0 && <tr><td className="sub" colSpan="5">No petty cash movements yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {modal === 'expense' && <PettyModal kind="expense" onClose={() => { setModal(null); load(); }} />}
+      {modal === 'topup' && <PettyModal kind="topup" onClose={() => { setModal(null); load(); }} />}
+      {modal === 'count' && <PettyModal kind="count" onClose={() => { setModal(null); load(); }} />}
     </>
   );
 }
 
-/* ---------------- Shop pricing: stock-first, priced-only ---------------- */
-function ShopStockPricingModal({ onClose, onSaved }) {
-  const [stock, setStock] = useState(null);          // null = loading
-  const [category, setCategory] = useState('');
-  const [stockItemId, setStockItemId] = useState('');
-  const [price_unit, setPrice] = useState('');
+function PettyModal({ kind, onClose }) {
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [receipt_ref, setReceipt] = useState('');
   const [err, setErr] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    api('/api/menu/shop-stock')
-      .then((rows) => {
-        setStock(rows);
-        const first = [...new Set(rows.map((r) => r.category || 'uncategorised'))][0];
-        if (first) setCategory(first);
-      })
-      .catch((e) => { setErr(e.message); setStock([]); });
-  }, []);
-
-  const cats = stock ? [...new Set(stock.map((r) => r.category || 'uncategorised'))].sort() : [];
-  const inCat = stock ? stock.filter((r) => (r.category || 'uncategorised') === category) : [];
-  const chosen = stock ? stock.find((r) => r.id === stockItemId) : null;
-  const canSave = stockItemId && Number(price_unit) > 0 && !saving;
 
   const submit = async () => {
-    setErr(''); setSaving(true);
+    setErr('');
     try {
-      const created = await api('/api/menu/from-stock', { method: 'POST',
-        body: { stock_item_id: stockItemId, price_unit } });
-      onSaved(created);
-    } catch (e) { setErr(e.message); setSaving(false); }
+      if (kind === 'expense')
+        await api('/api/petty/expense', { method: 'POST', body: { amount: Number(amount), description, receipt_ref } });
+      else if (kind === 'topup')
+        await api('/api/petty/topup', { method: 'POST', body: { amount: Number(amount), description } });
+      else
+        await api('/api/petty/count', { method: 'POST', body: { counted_amount: Number(amount), description } });
+      onClose();
+    } catch (e) { setErr(e.message); }
   };
+
+  const titles = { expense: 'Record expense', topup: 'Top up float', count: 'Count the tin' };
+  const amountLabel = kind === 'count' ? 'Counted amount (R) *' : 'Amount (R) *';
 
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Price a shop item</h2>
-        <div className="sub">Pick a shop stock item and give it a selling price. It appears in the Tuck Shop only once priced.</div>
+        <h2>{titles[kind]}</h2>
+        {kind === 'expense' && <div className="sub">Money out for something not in stock (e.g. transport). Reason is required.</div>}
+        {kind === 'count' && <div className="sub">Enter what's physically in the tin - the system records the variance vs expected.</div>}
         {err && <div className="err">{err}</div>}
-
-        {stock === null && <div className="sub">Loading shop stock…</div>}
-
-        {stock && stock.length === 0 && (
-          <div className="ok">Every shop stock item already has a price, or none exist yet. Add the item on the Stock page (shop register) first, then price it here.</div>
-        )}
-
-        {stock && stock.length > 0 && (
+        <label>{amountLabel}</label>
+        <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+        {kind === 'expense' && (
           <>
-            <label>Category</label>
-            <select value={category} onChange={(e) => { setCategory(e.target.value); setStockItemId(''); }}>
-              {cats.map((c) => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
-            </select>
-
-            <label>Stock item *</label>
-            <select value={stockItemId} onChange={(e) => setStockItemId(e.target.value)}>
-              <option value="">Choose…</option>
-              {inCat.map((r) => <option key={r.id} value={r.id}>{r.name} (on hand: {Number(r.current_quantity)})</option>)}
-            </select>
-
-            <label>Selling price each (R) *</label>
-            <input type="number" step="0.01" min="0" value={price_unit} onChange={(e) => setPrice(e.target.value)} />
-
-            {chosen && (
-              <div className="sub" style={{ marginTop: 4 }}>
-                Pricing “{chosen.name}”. Each sale deducts one from its shop stock, and it shows sold-out at zero.
-              </div>
-            )}
+            <label>Reason * (goes to the audit log)</label>
+            <textarea rows="2" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. taxi fare for staff to supplier meeting" />
+            <label>Receipt reference</label>
+            <input value={receipt_ref} onChange={(e) => setReceipt(e.target.value)} placeholder="slip no. if any" />
           </>
         )}
-
-        <div className="btnrow" style={{ marginTop: 16, justifyContent: 'space-between' }}>
+        {kind === 'topup' && (
+          <><label>Note</label>
+            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. owner float top-up" /></>
+        )}
+        {kind === 'count' && (
+          <><label>Note</label>
+            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" /></>
+        )}
+        <div className="btnrow" style={{ marginTop: 14, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn green" disabled={!canSave} onClick={submit}>{saving ? 'Saving…' : 'Add to menu'}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Kitchen / add-on items (menu-first, no shop) ---------------- */
-const MENU_CATEGORIES = [
-  ['plate', 'Plate (meal)'],
-  ['protein_standalone', 'Protein (standalone)'],
-  ['braai_per_kg', 'Braai (per kg)'],
-  ['addon', 'Add-on'],
-];
-
-const PRICING = [
-  ['dual_fixed', 'Sit-down & takeaway (fixed)'],
-  ['per_kg', 'Per kilogram'],
-  ['unit', 'Per unit / each'],
-];
-
-const REGISTERS = [
-  ['', 'Not linked'],
-  ['kitchen', 'Kitchen'],
-  ['guest_house', 'Guest house'],
-];
-
-function NewMenuItemModal({ onClose, onSaved }) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('plate');
-  const [pricing_type, setPricing] = useState('dual_fixed');
-  const [price_sit_down, setSit] = useState('');
-  const [price_takeaway, setTake] = useState('');
-  const [price_per_kg, setKg] = useState('');
-  const [price_unit, setUnit] = useState('');
-  const [stock_register, setRegister] = useState('');
-  const [is_available, setAvailable] = useState(true);
-  const [err, setErr] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const priceReady =
-    pricing_type === 'dual_fixed' ? (price_sit_down !== '' && price_takeaway !== '') :
-    pricing_type === 'per_kg'     ? (price_per_kg !== '') :
-                                    (price_unit !== '');
-  const canSave = name.trim() !== '' && priceReady && !saving;
-
-  const submit = async () => {
-    setErr(''); setSaving(true);
-    try {
-      const created = await api('/api/menu', { method: 'POST', body: {
-        name: name.trim(), category, pricing_type,
-        price_sit_down, price_takeaway, price_per_kg, price_unit,
-        stock_register: stock_register || null, is_available,
-      }});
-      onSaved(created);
-    } catch (e) { setErr(e.message); setSaving(false); }
-  };
-
-  return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>New menu item</h2>
-        <div className="sub">For kitchen &amp; add-on items. Shop drinks/snacks are added via “Price shop item”.</div>
-        {err && <div className="err">{err}</div>}
-
-        <label>Name *</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Chicken &amp; chips" autoFocus />
-
-        <div className="formrow">
-          <div>
-            <label>Category *</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {MENU_CATEGORIES.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
-            </select>
-          </div>
-          <div>
-            <label>Pricing *</label>
-            <select value={pricing_type} onChange={(e) => setPricing(e.target.value)}>
-              {PRICING.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
-            </select>
-          </div>
-        </div>
-
-        {pricing_type === 'dual_fixed' && (
-          <div className="formrow">
-            <div><label>Sit-down price (R) *</label><input type="number" step="0.01" value={price_sit_down} onChange={(e) => setSit(e.target.value)} /></div>
-            <div><label>Takeaway price (R) *</label><input type="number" step="0.01" value={price_takeaway} onChange={(e) => setTake(e.target.value)} /></div>
-          </div>
-        )}
-        {pricing_type === 'per_kg' && (
-          <>
-            <label>Price per kg (R) *</label>
-            <input type="number" step="0.01" value={price_per_kg} onChange={(e) => setKg(e.target.value)} />
-          </>
-        )}
-        {pricing_type === 'unit' && (
-          <>
-            <label>Price each (R) *</label>
-            <input type="number" step="0.01" value={price_unit} onChange={(e) => setUnit(e.target.value)} />
-          </>
-        )}
-
-        <label>Stock register (optional)</label>
-        <select value={stock_register} onChange={(e) => setRegister(e.target.value)}>
-          {REGISTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
-        </select>
-
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-          <input type="checkbox" checked={is_available} onChange={(e) => setAvailable(e.target.checked)} style={{ width: 'auto' }} />
-          On sale straight away
-        </label>
-
-        <div className="btnrow" style={{ marginTop: 16, justifyContent: 'space-between' }}>
-          <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn green" disabled={!canSave} onClick={submit}>{saving ? 'Saving…' : 'Add menu item'}</button>
+          <AsyncButton className="btn green"
+            disabled={!(Number(amount) > 0) && !(kind === 'count' && amount !== '') || (kind === 'expense' && !description.trim())}
+            onClick={submit}>Save</AsyncButton>
         </div>
       </div>
     </div>

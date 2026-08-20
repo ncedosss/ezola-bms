@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
 import { useToast } from '../components/Toast.jsx';  
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // S03 room grid + S04 check-in + S05 stays & checkout + R65 cash-transfer confirms
 export default function Rooms() {
@@ -147,9 +148,9 @@ function CheckInModal({ room, onClose }) {
         </div>
         <div className="btnrow" style={{ marginTop: 16, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn green" disabled={!guest_name.trim()} onClick={submit}>
+          <AsyncButton className="btn green" disabled={!guest_name.trim()} onClick={submit}>
             Take {R(amount)}{condoms > 0 ? ` (room ${R(roomAmount)} + ${condoms}× condom)` : ''} & check in
-          </button>
+          </AsyncButton>
         </div>
       </div>
     </div>
@@ -239,13 +240,13 @@ function StayModal({ room, onClose }) {
                   </div>
                 </div>
 
-                <button
+                <AsyncButton
                   className="btn amber"
                   style={{ marginTop: 10 }}
                   onClick={topup}
                 >
                   Take {R(overdueAmount)} & extend
-                </button>
+                </AsyncButton>
               </>
             ) : (
               <>
@@ -274,13 +275,13 @@ function StayModal({ room, onClose }) {
                   </div>
                 </div>
 
-                <button
+                <AsyncButton
                   className="btn amber"
                   style={{ marginTop: 10 }}
                   onClick={topup}
                 >
                   Take {R(Number(room.hourly_rate) * extra)} & extend
-                </button>
+                </AsyncButton>
               </>
             )}
           </div>
@@ -293,8 +294,8 @@ function StayModal({ room, onClose }) {
             <>
               <div className="err">{overdueInfo}</div>
               <div className="btnrow">
-                <button className="btn green" onClick={() => doCheckout('cash')}>Collected cash</button>
-                <button className="btn green" onClick={() => doCheckout('card')}>Collected card</button>
+                <AsyncButton className="btn green" onClick={() => doCheckout('cash')}>Collected cash</AsyncButton>
+                <AsyncButton className="btn green" onClick={() => doCheckout('card')}>Collected card</AsyncButton>
               </div>
             </>
           ) : (
@@ -314,12 +315,12 @@ function StayModal({ room, onClose }) {
                     Early departure: no refunds.
                   </div>
 
-                  <button
+                  <AsyncButton
                     className="btn red"
                     onClick={() => doCheckout(null)}
                   >
                     Check out - room to cleaning
-                  </button>
+                  </AsyncButton>
                 </>
               )}
             </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
   XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // Lodge palette (mirrors styles.css) so charts match the rest of the app
 const C = { green: '#63BE7A', amber: '#EFB44C', red: '#E0685E', ink: '#20261F', sage: '#8FB7A7', line: '#EAEEEA' };

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // S14 - open alerts feed (low stock, variance breaches, pending adjustments, unconfirmed R65 walks)
 export default function Alerts() {
@@ -23,7 +24,7 @@ export default function Alerts() {
             <tr key={a.id}>
               <td style={{ width: 130 }}><span className={`badge ${badge(a.type)}`}>{a.type.replace(/_/g, ' ')}</span></td>
               <td>{a.message}<div className="sub">{new Date(a.created_at).toLocaleString('en-ZA')}</div></td>
-              <td style={{ width: 90 }}><button className="btn ghost sm" onClick={() => ack(a)}>Acknowledge</button></td>
+              <td style={{ width: 90 }}><AsyncButton className="btn ghost sm" onClick={() => ack(a)}>Acknowledge</AsyncButton></td>
             </tr>
           ))}
         </tbody></table>

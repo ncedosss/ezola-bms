@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
 import { useAuth } from '../App.jsx';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // Petty cash: standalone tuck-shop float. Top-ups in, expenses out, counts for control.
 export default function Petty() {

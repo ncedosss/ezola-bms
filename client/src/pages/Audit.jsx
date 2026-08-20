@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import AsyncButton from '../components/AsyncButton.jsx';
 
 // Audit trail viewer (owner + office manager) - who did what, when, with filters
 export default function Audit() {
