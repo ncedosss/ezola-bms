@@ -302,7 +302,7 @@ function NewOrder({ menu, stays, onClose }) {
           <b>Total {R(total)}</b>
           <div className="btnrow">
             <button className="btn ghost" onClick={onClose}>Cancel</button>
-            <AsyncButton className="btn green" disabled={!lines.length || (channel === 'room' && !stayId) || (channel === 'restaurant' && !tableNumber)} onClick={submit}>
+            <AsyncButton className="btn green" disabled={!lines.length || (channel === 'room' && !stayId) || (channel === 'restaurant' && service === 'sit_down' && !tableNumber)} onClick={submit}>
               Take an order
             </AsyncButton>
           </div>
