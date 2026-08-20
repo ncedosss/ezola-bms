@@ -206,7 +206,7 @@ function NewOrder({ menu, stays, onClose }) {
             {hasCredit && <div className="ok">This stay has {creditsAvailable} overnight meal credit{creditsAvailable > 1 ? 's' : ''} (R65 each). Tick "use R65 credit" on up to {creditsAvailable} plate line{creditsAvailable > 1 ? 's' : ''} — {creditsUsed}/{creditsAvailable} used.</div>}
           </>
         )}
-        {channel === 'restaurant' && (
+        {channel === 'restaurant' && service === 'sit_down' && (
           <>
             <label>Table *</label>
             <select value={tableNumber} onChange={(e) => setTableNumber(e.target.value)}>
