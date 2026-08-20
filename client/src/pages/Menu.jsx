@@ -66,9 +66,24 @@ export default function Menu() {
                 <tr key={m.id}>
                   <td>{m.name}</td>
                   <td>
-                    {m.pricing_type === 'dual_fixed' && <>sit-down <P m={m} field="price_sit_down" /> takeaway <P m={m} field="price_takeaway" /></>}
-                    {m.pricing_type === 'per_kg' && <>per kg <P m={m} field="price_per_kg" /></>}
-                    {m.pricing_type === 'unit' && <>each <P m={m} field="price_unit" /></>}
+                    {m.pricing_type === 'dual_fixed' && <>
+                      sit-down <input type="number" step="0.01" style={{ width: 90 }}
+                        value={m.price_sit_down ?? ''}
+                        onChange={(e) => setField(m.id, 'price_sit_down', e.target.value)} />
+                      {' '}takeaway <input type="number" step="0.01" style={{ width: 90 }}
+                        value={m.price_takeaway ?? ''}
+                        onChange={(e) => setField(m.id, 'price_takeaway', e.target.value)} />
+                    </>}
+                    {m.pricing_type === 'per_kg' && <>
+                      per kg <input type="number" step="0.01" style={{ width: 90 }}
+                        value={m.price_per_kg ?? ''}
+                        onChange={(e) => setField(m.id, 'price_per_kg', e.target.value)} />
+                    </>}
+                    {m.pricing_type === 'unit' && <>
+                      each <input type="number" step="0.01" style={{ width: 90 }}
+                        value={m.price_unit ?? ''}
+                        onChange={(e) => setField(m.id, 'price_unit', e.target.value)} />
+                    </>}
                   </td>
                   <td>
                     <button className={`btn sm ${m.is_available ? 'green' : 'red'}`}
