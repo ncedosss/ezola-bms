@@ -98,11 +98,13 @@ function CheckInModal({ room, rates = {}, onClose }) {
     const t = tiers.find((x) => x.floor === room.floor && Number(x.hours) === h);
     return t ? Number(t.amount) : Number(room.hourly_rate) * h;
   };
-  const band = rates.overnight_band;                     // undefined until loaded
+  const band = rates.band;                                  // undefined until loaded
+  const on = rates.overnight || {}, dn = rates.day_night || {};
   const overnightPrice = band === 'weekday'
-    ? Number(room.overnight_rate_weekday)
-    : Number(room.overnight_rate);
-  const roomAmount = stay_type === 'hourly' ? priceFor(hours) : overnightPrice;
+    ? Number(room.overnight_rate_weekday) : Number(room.overnight_rate);
+  const roomAmount =
+    stay_type === 'hourly'    ? priceFor(hours) :
+    stay_type === 'day_night' ? Number(dn.amount || 0) : overnightPrice;
   const amount = roomAmount + condoms * CONDOM_PRICE;
 
   const submit = async () => {
@@ -134,15 +136,23 @@ function CheckInModal({ room, rates = {}, onClose }) {
         <label>Stay type</label>
         <div className="tabs">
           <button className={stay_type === 'hourly' ? 'on' : ''} onClick={() => setType('hourly')}>Hourly (1-5)</button>
-          <button className={stay_type === 'overnight' ? 'on' : ''} onClick={() => setType('overnight')}>
+          <button className={stay_type === 'day_night' ? 'on' : ''} disabled={!dn.open}
+            onClick={() => setType('day_night')} title={dn.open ? '' : 'Closes at 18:00'}>
+            Day &amp; night {band ? R(dn.amount) : '…'}
+          </button>
+          <button className={stay_type === 'overnight' ? 'on' : ''} disabled={!on.open}
+            onClick={() => setType('overnight')} title={on.open ? '' : 'Opens at 18:00'}>
             Overnight {band ? R(overnightPrice) : '…'}
           </button>
         </div>
-        {stay_type === 'overnight' && band && (
+        {stay_type !== 'hourly' && band && (
           <div className="sub">
+            {stay_type === 'day_night'
+              ? 'Checks out 11:00 tomorrow. '
+              : 'Checks out 11:00 tomorrow. '}
             {band === 'weekend'
-              ? 'Weekend night (Fri/Sat/Sun) - includes two R65 plates.'
-              : 'Weekday night - no food included. Plates are charged separately.'}
+              ? 'Weekend (Fri/Sat/Sun) - includes two R65 plates.'
+              : 'Weekday - no food included. Plates are charged separately.'}
           </div>
         )}
         {stay_type === 'hourly' && (

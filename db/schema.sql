@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS stays (
   captured_by UUID NOT NULL REFERENCES users(id),
   guest_name VARCHAR(160) NOT NULL,
   signature_ref TEXT,                               -- replaces the paper login book
-  stay_type TEXT NOT NULL CHECK (stay_type IN ('hourly','overnight')),
+  stay_type TEXT NOT NULL CHECK (stay_type IN ('hourly','overnight','day_night')),
   hours_purchased INTEGER,                          -- 1-5 for hourly; NULL for overnight
   check_in_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ,                           -- check_in + hours (hourly): drives room-grid countdown
@@ -76,6 +76,11 @@ CREATE TABLE IF NOT EXISTS stays (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','completed','cancelled')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Constraints have no IF NOT EXISTS - drop then add is the idempotent pair.
+ALTER TABLE stays DROP CONSTRAINT IF EXISTS stays_stay_type_check;
+ALTER TABLE stays ADD CONSTRAINT stays_stay_type_check
+  CHECK (stay_type IN ('hourly','overnight','day_night'));
 
 CREATE TABLE IF NOT EXISTS stay_topups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -287,6 +292,15 @@ CREATE TABLE IF NOT EXISTS petty_cash_entries (
   business_date DATE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Day & night: check in 00:00-17:59, out 11:00 the next morning. Any room, any class.
+CREATE TABLE IF NOT EXISTS day_night_rates (
+  band   TEXT PRIMARY KEY CHECK (band IN ('weekday','weekend')),
+  amount NUMERIC(10,2) NOT NULL
+);
+
+INSERT INTO day_night_rates (band, amount) VALUES ('weekday',570),('weekend',700)
+ON CONFLICT (band) DO NOTHING;
 
 
 CREATE INDEX IF NOT EXISTS idx_payments_bdate_till ON payments (business_date, till);

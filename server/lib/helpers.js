@@ -1,9 +1,11 @@
 const pool = require('../db');
 
-// Trading date: a payment at 00:30 belongs to the prior day (close 22:00, 00:00 Fri/Sat). Cutoff 04:00 SAST.
+// Trading date = the SAST calendar date. Midnight boundary: 00:01 Monday is Monday.
+// (Previously a 04:00 cutoff. Restaurant and shop close by midnight, so nothing trades
+// between 00:00 and 04:00 except the guest house - and its post-midnight takings were
+// landing on the previous day's cash-up.)
 function businessDate(d = new Date()) {
-  const shifted = new Date(d.getTime() - 4 * 3600 * 1000);
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(shifted); // YYYY-MM-DD
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(d);
 }
 
 async function audit(client, userId, action, entity, entityId, detail = null) {
