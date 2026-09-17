@@ -59,7 +59,7 @@ export default function Rooms() {
               else if (r.status === 'occupied') setCheckout(r);
             }}>
               <div className="rn">{r.room_number}</div>
-                            <div className="meta">{r.floor} · from {R(r.hourly_rate)}/hr {r.has_tv ? '· TV' : ''}{r.has_fridge ? ' · Fridge' : ''}</div>
+              <div className="meta">{r.floor}{r.room_class === 'enhanced' ? ' · enhanced' : ''} · from {R(r.hourly_rate)}/hr {r.has_tv ? '· TV' : ''}{r.has_fridge ? ' · Fridge' : ''}</div>
               {r.status === 'occupied' && (
                 <>
                   <div className="meta">{r.guest_name} · {r.stay_type}</div>
@@ -126,7 +126,7 @@ function CheckInModal({ room, rates = {}, onClose }) {
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Check in - Room {room.room_number}</h2>
+        <h2>Check in - Room {room.room_number}{room.room_class === 'enhanced' ? ' (Enhanced)' : ''}</h2>
         <div className="sub">{room.floor} · from {R(priceFor(1))}/hour · overnight {band ? R(overnightPrice) : '…'}</div>
         {err && <div className="err">{err}</div>}
         <label>Guest name *</label>

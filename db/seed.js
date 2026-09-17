@@ -36,8 +36,14 @@ async function main() {
   // ---------- Rooms: 4 downstairs @ R130, 6 upstairs @ R150, overnight R550 ----------
   for (let i = 1; i <= 4; i++)
     await pool.query(`INSERT INTO rooms (room_number,floor,hourly_rate,overnight_rate) VALUES ($1,'downstairs',130,550)`, [`D${i}`]);
-  for (let i = 1; i <= 6; i++)
-    await pool.query(`INSERT INTO rooms (room_number,floor,hourly_rate,overnight_rate) VALUES ($1,'upstairs',150,550)`, [`U${i}`]);
+  // 6 upstairs @ R150/hr. U5 & U6 are renovated "enhanced" rooms: overnight R520 weekday / R650 weekend.
+  for (let i = 1; i <= 6; i++) {
+    const enhanced = i >= 5;
+    await pool.query(
+      `INSERT INTO rooms (room_number,floor,hourly_rate,overnight_rate,overnight_rate_weekday,room_class)
+       VALUES ($1,'upstairs',150,$2,$3,$4)`,
+      [`U${i}`, enhanced ? 650 : 550, enhanced ? 520 : 420, enhanced ? 'enhanced' : 'standard']);
+  }
   // TV/fridge per-room flags pending (Open Item) - set via SQL/admin once confirmed.
 
   // ---------- Kitchen stock register ----------

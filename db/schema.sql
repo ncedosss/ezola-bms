@@ -33,6 +33,15 @@ CREATE TABLE IF NOT EXISTS rooms (
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS
   overnight_rate_weekday NUMERIC(10,2) NOT NULL DEFAULT 420;
 
+-- U5 and U6 were renovated: "enhanced". Overnight only - hourly is unchanged,
+-- so they still price off the 'upstairs' rows in hourly_rate_tiers.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS
+  room_class TEXT NOT NULL DEFAULT 'standard' CHECK (room_class IN ('standard','enhanced'));
+
+UPDATE rooms
+   SET room_class = 'enhanced', overnight_rate = 650, overnight_rate_weekday = 520
+ WHERE room_number IN ('U5','U6') AND room_class = 'standard';
+
 -- Which band a stay was sold under - kept for reconciliation and the kitchen slip.
 ALTER TABLE stays ADD COLUMN IF NOT EXISTS
   overnight_band TEXT CHECK (overnight_band IN ('weekday','weekend'));
