@@ -14,10 +14,12 @@ router.get('/rates', async (req, res) => {
   res.json({ hourly: rows, overnight_band: band, overnight_includes_food: band === 'weekend' });
 });
 
-// Overnight checkout deadline: next day 10:00 SAST (UTC+2, no DST) = 08:00 UTC
-function overnightDeadline() {
-  const sastNow = new Date(Date.now() + 2 * 3600e3);
-  return new Date(Date.UTC(sastNow.getUTCFullYear(), sastNow.getUTCMonth(), sastNow.getUTCDate() + 1, 8, 0, 0));
+// Overnight: check-in from 18:00, checkout by 11:00 SAST the next morning (UTC+2, no DST) = 09:00 UTC.
+// Derived from the business date, not from now() - businessDate() rolls a 01:00 walk-in back onto
+// the previous night, so an after-midnight arrival still checks out that same morning.
+function overnightDeadline(bdate = businessDate()) {
+  const [y, m, d] = bdate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1, 9, 0, 0)); // 11:00 SAST next day
 }
 
 // Upfront hourly packages are discounted (hourly_rate_tiers). Top-ups and
@@ -90,7 +92,7 @@ router.post('/stays', requireRole(RECEPTION_PLUS), async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6::int, CASE WHEN $5::text='hourly' THEN now() + make_interval(hours => $6::int) ELSE $8::timestamptz END, $7, $7, $9)
          RETURNING *`,
         [room_id, req.user.id, guest_name || null, signature_ref || null, stay_type,
-         stay_type === 'hourly' ? hours : null, amount, overnightDeadline(), band]
+         stay_type === 'hourly' ? hours : null, amount, overnightDeadline(bdate), band]
       )).rows[0];
 
       await c.query(`UPDATE rooms SET status='occupied' WHERE id=$1`, [room_id]);
@@ -134,6 +136,12 @@ router.post('/stays', requireRole(RECEPTION_PLUS), async (req, res) => {
              VALUES ('guest_house','restaurant',130,$1,$2,$3)`,
             [credits[0].id, req.user.id, bdate]);
         }
+      }
+      if (stay_type === 'overnight') {
+        const sastHour = Number(new Intl.DateTimeFormat('en-ZA', {
+          timeZone: 'Africa/Johannesburg', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+        if (sastHour < 18)
+          return res.status(400).json({ error: 'Overnight check-in runs 18:00-00:00. After midnight, sell hourly hours instead.' });
       }
       await audit(c, req.user.id, 'check_in', 'stays', stay.id, { room: room.room_number, stay_type, amount, band });
       return { stay, meal_credit };
