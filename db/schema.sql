@@ -21,13 +21,21 @@ CREATE TABLE IF NOT EXISTS rooms (
   hourly_rate NUMERIC(10,2) NOT NULL,               -- STANDARD per-hour rate (R130 d/s, R150 u/s).
                                                     -- Used for top-ups & overstays only.
                                                     -- Upfront packages are priced from hourly_rate_tiers.
-  overnight_rate NUMERIC(10,2) NOT NULL DEFAULT 550,-- includes one R65 meal credit
+  overnight_rate NUMERIC(10,2) NOT NULL DEFAULT 550,-- WEEKEND night (Fri/Sat/Sun): includes two R65 plates
   has_tv BOOLEAN NOT NULL DEFAULT FALSE,            -- informational only, never changes price
   has_fridge BOOLEAN NOT NULL DEFAULT FALSE,
   status TEXT NOT NULL DEFAULT 'vacant' CHECK (status IN ('vacant','occupied','cleaning','maintenance')),
   max_guests INTEGER NOT NULL DEFAULT 2,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Weekday nights (Mon-Thu) are cheaper and do NOT include food.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS
+  overnight_rate_weekday NUMERIC(10,2) NOT NULL DEFAULT 420;
+
+-- Which band a stay was sold under - kept for reconciliation and the kitchen slip.
+ALTER TABLE stays ADD COLUMN IF NOT EXISTS
+  overnight_band TEXT CHECK (overnight_band IN ('weekday','weekend'));
 
 -- Discounted upfront hourly packages (rate card at reception).
 -- Only applies to money taken at check-in; top-ups bill at rooms.hourly_rate.

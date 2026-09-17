@@ -11,7 +11,7 @@ export default function Rooms() {
   const [checkout, setCheckout] = useState(null); // stay row for checkout/topup modal
   const [err, setErr] = useState('');
   const [, tick] = useState(0);
-  const [rates, setRates] = useState([]);
+  const [rates, setRates] = useState({});
 
   const load = () => {
     api('/api/guesthouse/rooms').then(setRooms).catch((e) => setErr(e.message));
@@ -84,7 +84,7 @@ export default function Rooms() {
   );
 }
 
-function CheckInModal({ room, rates = [], onClose }) {
+function CheckInModal({ room, rates = {}, onClose }) {
   const toast = useToast();
   const [guest_name, setName] = useState('');
   const [stay_type, setType] = useState('hourly');
@@ -92,12 +92,17 @@ function CheckInModal({ room, rates = [], onClose }) {
   const [payment_method, setMethod] = useState('cash');
   const [condoms, setCondoms] = useState(0);
   const [err, setErr] = useState('');
-  const CONDOM_PRICE = 10;
+  const CONDOM_PRICE = 20;
+  const tiers = rates.hourly || [];
   const priceFor = (h) => {
-    const t = rates.find((x) => x.floor === room.floor && Number(x.hours) === h);
+    const t = tiers.find((x) => x.floor === room.floor && Number(x.hours) === h);
     return t ? Number(t.amount) : Number(room.hourly_rate) * h;
   };
-  const roomAmount = stay_type === 'hourly' ? priceFor(hours) : Number(room.overnight_rate);
+  const band = rates.overnight_band;                     // undefined until loaded
+  const overnightPrice = band === 'weekday'
+    ? Number(room.overnight_rate_weekday)
+    : Number(room.overnight_rate);
+  const roomAmount = stay_type === 'hourly' ? priceFor(hours) : overnightPrice;
   const amount = roomAmount + condoms * CONDOM_PRICE;
 
   const submit = async () => {
@@ -122,15 +127,24 @@ function CheckInModal({ room, rates = [], onClose }) {
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Check in - Room {room.room_number}</h2>
-        <div className="sub">{room.floor} · from {R(priceFor(1))}/hour · overnight {R(room.overnight_rate)} (includes R65 plate)</div>
+        <div className="sub">{room.floor} · from {R(priceFor(1))}/hour · overnight {band ? R(overnightPrice) : '…'}</div>
         {err && <div className="err">{err}</div>}
         <label>Guest name *</label>
         <input value={guest_name} onChange={(e) => setName(e.target.value)} autoFocus />
         <label>Stay type</label>
         <div className="tabs">
           <button className={stay_type === 'hourly' ? 'on' : ''} onClick={() => setType('hourly')}>Hourly (1-5)</button>
-          <button className={stay_type === 'overnight' ? 'on' : ''} onClick={() => setType('overnight')}>Overnight R550</button>
+          <button className={stay_type === 'overnight' ? 'on' : ''} onClick={() => setType('overnight')}>
+            Overnight {band ? R(overnightPrice) : '…'}
+          </button>
         </div>
+        {stay_type === 'overnight' && band && (
+          <div className="sub">
+            {band === 'weekend'
+              ? 'Weekend night (Fri/Sat/Sun) - includes two R65 plates.'
+              : 'Weekday night - no food included. Plates are charged separately.'}
+          </div>
+        )}
         {stay_type === 'hourly' && (
           <>
             <label>Hours <span className="sub">- longer stays are discounted</span></label>

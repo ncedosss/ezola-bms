@@ -5,11 +5,13 @@ const { businessDate, audit, alert, nextOrderNumber, tx, httpErr } = require('..
 
 router.use(requireAuth);
 
-// Rate card for the check-in screen
+// Rate card for the check-in screen. The band is decided server-side -
+// the browser doesn't know about the 04:00 trading cutoff.
 router.get('/rates', async (req, res) => {
   const { rows } = await pool.query(
     'SELECT floor, hours, amount FROM hourly_rate_tiers ORDER BY floor, hours');
-  res.json(rows);
+  const band = overnightBand();
+  res.json({ hourly: rows, overnight_band: band, overnight_includes_food: band === 'weekend' });
 });
 
 // Overnight checkout deadline: next day 10:00 SAST (UTC+2, no DST) = 08:00 UTC
@@ -26,6 +28,15 @@ async function packagePrice(c, room, hours) {
     [room.floor, hours]
   );
   return t.rowCount ? Number(t.rows[0].amount) : Number(room.hourly_rate) * hours;
+}
+
+// Friday, Saturday and Sunday nights are "weekend": R550 with two R65 plates.
+// Mon-Thu nights are R420 and include no food.
+// businessDate() already rolls a 01:00 walk-in back onto the previous night,
+// so a Saturday 01:00 check-in is correctly billed as Friday night.
+function overnightBand(bdate = businessDate()) {
+  const dow = new Date(`${bdate}T12:00:00Z`).getUTCDay(); // 0=Sun .. 5=Fri, 6=Sat
+  return (dow === 0 || dow === 5 || dow === 6) ? 'weekend' : 'weekday';
 }
 
 // S03 - room grid with live stay info
@@ -70,15 +81,16 @@ router.post('/stays', requireRole(RECEPTION_PLUS), async (req, res) => {
       if (!room) throw Object.assign(new Error('Room not found'), { code: 404 });
       if (room.status !== 'vacant') throw Object.assign(new Error(`Room ${room.room_number} is ${room.status}`), { code: 400 });
 
-      const amount = stay_type === 'hourly' ? await packagePrice(c, room, hours) : Number(room.overnight_rate);
       const bdate = businessDate();
+      const band = stay_type === 'overnight' ? overnightBand(bdate) : null;
+      const amount = stay_type === 'hourly' ? await packagePrice(c, room, hours) : (band === 'weekend' ? Number(room.overnight_rate) : Number(room.overnight_rate_weekday));
       const stay = (await c.query(
         `INSERT INTO stays (room_id, captured_by, guest_name, signature_ref, stay_type, hours_purchased,
-                            expires_at, amount_due, amount_paid)
-      VALUES ($1,$2,$3,$4,$5,$6::int, CASE WHEN $5::text='hourly' THEN now() + make_interval(hours => $6::int) ELSE $8::timestamptz END, $7, $7)
+                            expires_at, amount_due, amount_paid, overnight_band)
+      VALUES ($1,$2,$3,$4,$5,$6::int, CASE WHEN $5::text='hourly' THEN now() + make_interval(hours => $6::int) ELSE $8::timestamptz END, $7, $7, $9)
          RETURNING *`,
         [room_id, req.user.id, guest_name || null, signature_ref || null, stay_type,
-         stay_type === 'hourly' ? hours : null, amount, overnightDeadline()]
+         stay_type === 'hourly' ? hours : null, amount, overnightDeadline(), band]
       )).rows[0];
 
       await c.query(`UPDATE rooms SET status='occupied' WHERE id=$1`, [room_id]);
@@ -105,7 +117,7 @@ router.post('/stays', requireRole(RECEPTION_PLUS), async (req, res) => {
       }
 
       let meal_credit = null;
-      if (stay_type === 'overnight') {
+      if (stay_type === 'overnight' && band === 'weekend') {
         // R550 includes TWO R65 plates (R130 total). Cash -> R130 physically walked to the
         // restaurant till (one transfer). Card -> flagged on the kitchen slip, no cash moves.
         const funding = payment_method === 'cash' ? 'cash_walked' : 'card_noted';
@@ -123,7 +135,7 @@ router.post('/stays', requireRole(RECEPTION_PLUS), async (req, res) => {
             [credits[0].id, req.user.id, bdate]);
         }
       }
-      await audit(c, req.user.id, 'check_in', 'stays', stay.id, { room: room.room_number, stay_type, amount });
+      await audit(c, req.user.id, 'check_in', 'stays', stay.id, { room: room.room_number, stay_type, amount, band });
       return { stay, meal_credit };
     });
     res.status(201).json(out);
