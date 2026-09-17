@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   room_number VARCHAR(10) UNIQUE NOT NULL,          -- D1-D4, U1-U6 (numbering pending Open Item)
   floor TEXT NOT NULL CHECK (floor IN ('downstairs','upstairs')),
-  hourly_rate NUMERIC(10,2) NOT NULL,               -- R130 d/s, R150 u/s - flat regardless of amenities
+  hourly_rate NUMERIC(10,2) NOT NULL,               -- STANDARD per-hour rate (R130 d/s, R150 u/s).
+                                                    -- Used for top-ups & overstays only.
+                                                    -- Upfront packages are priced from hourly_rate_tiers.
   overnight_rate NUMERIC(10,2) NOT NULL DEFAULT 550,-- includes one R65 meal credit
   has_tv BOOLEAN NOT NULL DEFAULT FALSE,            -- informational only, never changes price
   has_fridge BOOLEAN NOT NULL DEFAULT FALSE,
@@ -26,6 +28,20 @@ CREATE TABLE IF NOT EXISTS rooms (
   max_guests INTEGER NOT NULL DEFAULT 2,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Discounted upfront hourly packages (rate card at reception).
+-- Only applies to money taken at check-in; top-ups bill at rooms.hourly_rate.
+CREATE TABLE IF NOT EXISTS hourly_rate_tiers (
+  floor  TEXT NOT NULL CHECK (floor IN ('downstairs','upstairs')),
+  hours  INTEGER NOT NULL CHECK (hours BETWEEN 1 AND 5),
+  amount NUMERIC(10,2) NOT NULL,
+  PRIMARY KEY (floor, hours)
+);
+
+INSERT INTO hourly_rate_tiers (floor, hours, amount) VALUES
+  ('downstairs',1,130),('downstairs',2,230),('downstairs',3,320),('downstairs',4,380),('downstairs',5,420),
+  ('upstairs',  1,150),('upstairs',  2,250),('upstairs',  3,350),('upstairs',  4,400),('upstairs',  5,440)
+ON CONFLICT (floor, hours) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS stays (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

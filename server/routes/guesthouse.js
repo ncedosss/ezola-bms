@@ -5,10 +5,27 @@ const { businessDate, audit, alert, nextOrderNumber, tx, httpErr } = require('..
 
 router.use(requireAuth);
 
+// Rate card for the check-in screen
+router.get('/rates', async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT floor, hours, amount FROM hourly_rate_tiers ORDER BY floor, hours');
+  res.json(rows);
+});
+
 // Overnight checkout deadline: next day 10:00 SAST (UTC+2, no DST) = 08:00 UTC
 function overnightDeadline() {
   const sastNow = new Date(Date.now() + 2 * 3600e3);
   return new Date(Date.UTC(sastNow.getUTCFullYear(), sastNow.getUTCMonth(), sastNow.getUTCDate() + 1, 8, 0, 0));
+}
+
+// Upfront hourly packages are discounted (hourly_rate_tiers). Top-ups and
+// overstays are deliberately NOT discounted - they bill rooms.hourly_rate/hr.
+async function packagePrice(c, room, hours) {
+  const t = await c.query(
+    'SELECT amount FROM hourly_rate_tiers WHERE floor=$1 AND hours=$2',
+    [room.floor, hours]
+  );
+  return t.rowCount ? Number(t.rows[0].amount) : Number(room.hourly_rate) * hours;
 }
 
 // S03 - room grid with live stay info
@@ -53,7 +70,7 @@ router.post('/stays', requireRole(RECEPTION_PLUS), async (req, res) => {
       if (!room) throw Object.assign(new Error('Room not found'), { code: 404 });
       if (room.status !== 'vacant') throw Object.assign(new Error(`Room ${room.room_number} is ${room.status}`), { code: 400 });
 
-      const amount = stay_type === 'hourly' ? Number(room.hourly_rate) * hours : Number(room.overnight_rate);
+      const amount = stay_type === 'hourly' ? await packagePrice(c, room, hours) : Number(room.overnight_rate);
       const bdate = businessDate();
       const stay = (await c.query(
         `INSERT INTO stays (room_id, captured_by, guest_name, signature_ref, stay_type, hours_purchased,

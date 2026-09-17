@@ -11,10 +11,12 @@ export default function Rooms() {
   const [checkout, setCheckout] = useState(null); // stay row for checkout/topup modal
   const [err, setErr] = useState('');
   const [, tick] = useState(0);
+  const [rates, setRates] = useState([]);
 
   const load = () => {
     api('/api/guesthouse/rooms').then(setRooms).catch((e) => setErr(e.message));
     api('/api/guesthouse/cash-transfers').then(setTransfers).catch(() => {});
+    api('/api/guesthouse/rates').then(setRates).catch(() => {});
   };
   useEffect(() => { load(); const t = setInterval(() => { tick((x) => x + 1); }, 30000); return () => clearInterval(t); }, []);
 
@@ -57,7 +59,7 @@ export default function Rooms() {
               else if (r.status === 'occupied') setCheckout(r);
             }}>
               <div className="rn">{r.room_number}</div>
-              <div className="meta">{r.floor} · {R(r.hourly_rate)}/hr {r.has_tv ? '· TV' : ''}{r.has_fridge ? ' · Fridge' : ''}</div>
+                            <div className="meta">{r.floor} · from {R(r.hourly_rate)}/hr {r.has_tv ? '· TV' : ''}{r.has_fridge ? ' · Fridge' : ''}</div>
               {r.status === 'occupied' && (
                 <>
                   <div className="meta">{r.guest_name} · {r.stay_type}</div>
@@ -76,13 +78,13 @@ export default function Rooms() {
         })}
       </div>
 
-      {checkin && <CheckInModal room={checkin} onClose={() => { setCheckin(null); load(); }} />}
+            {checkin && <CheckInModal room={checkin} rates={rates} onClose={() => { setCheckin(null); load(); }} />}
       {checkout && <StayModal room={checkout} onClose={() => { setCheckout(null); load(); }} />}
     </>
   );
 }
 
-function CheckInModal({ room, onClose }) {
+function CheckInModal({ room, rates = [], onClose }) {
   const toast = useToast();
   const [guest_name, setName] = useState('');
   const [stay_type, setType] = useState('hourly');
@@ -91,7 +93,11 @@ function CheckInModal({ room, onClose }) {
   const [condoms, setCondoms] = useState(0);
   const [err, setErr] = useState('');
   const CONDOM_PRICE = 10;
-  const roomAmount = stay_type === 'hourly' ? Number(room.hourly_rate) * hours : Number(room.overnight_rate);
+  const priceFor = (h) => {
+    const t = rates.find((x) => x.floor === room.floor && Number(x.hours) === h);
+    return t ? Number(t.amount) : Number(room.hourly_rate) * h;
+  };
+  const roomAmount = stay_type === 'hourly' ? priceFor(hours) : Number(room.overnight_rate);
   const amount = roomAmount + condoms * CONDOM_PRICE;
 
   const submit = async () => {
@@ -116,7 +122,7 @@ function CheckInModal({ room, onClose }) {
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Check in - Room {room.room_number}</h2>
-        <div className="sub">{room.floor} · {R(room.hourly_rate)}/hour · overnight {R(room.overnight_rate)} (includes R65 plate)</div>
+        <div className="sub">{room.floor} · from {R(priceFor(1))}/hour · overnight {R(room.overnight_rate)} (includes R65 plate)</div>
         {err && <div className="err">{err}</div>}
         <label>Guest name *</label>
         <input value={guest_name} onChange={(e) => setName(e.target.value)} autoFocus />
@@ -127,10 +133,12 @@ function CheckInModal({ room, onClose }) {
         </div>
         {stay_type === 'hourly' && (
           <>
-            <label>Hours</label>
+            <label>Hours <span className="sub">- longer stays are discounted</span></label>
             <div className="tabs">
               {[1,2,3,4,5].map((h) => (
-                <button key={h} className={hours === h ? 'on' : ''} onClick={() => setHours(h)}>{h}h</button>
+                <button key={h} className={hours === h ? 'on' : ''} onClick={() => setHours(h)}>
+                  {h}h · {R(priceFor(h))}
+                </button>
               ))}
             </div>
           </>
