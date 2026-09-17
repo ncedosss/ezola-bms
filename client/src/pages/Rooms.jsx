@@ -102,8 +102,13 @@ function CheckInModal({ room, rates = {}, onClose }) {
   const on = rates.overnight || {}, dn = rates.day_night || {};
   const overnightPrice = band === 'weekday'
     ? Number(room.overnight_rate_weekday) : Number(room.overnight_rate);
+  const ev = rates.event || {};
+  const [guests, setGuests] = useState(10);
+  const eventOpen = ev.open && room.floor === 'downstairs';
+  const eventPrice = Number(ev.base_amount || 0) + Number(ev.plate_value || 0) * guests;
   const roomAmount =
     stay_type === 'hourly'    ? priceFor(hours) :
+    stay_type === 'event'     ? eventPrice :
     stay_type === 'day_night' ? Number(dn.amount || 0) : overnightPrice;
   const amount = roomAmount + condoms * CONDOM_PRICE;
 
@@ -112,7 +117,7 @@ function CheckInModal({ room, rates = {}, onClose }) {
     try {
       const out = await api('/api/guesthouse/stays', {
         method: 'POST',
-        body: { room_id: room.id, guest_name, stay_type, hours: Number(hours), payment_method, condoms: Number(condoms) },
+        body: { room_id: room.id, guest_name, stay_type, hours: Number(hours), payment_method, condoms: Number(condoms), guest_count: Number(guests) },
       });
     if (out.meal_credit) {
         if (out.meal_credit.funding_method === 'cash_walked')
@@ -144,6 +149,11 @@ function CheckInModal({ room, rates = {}, onClose }) {
             onClick={() => setType('overnight')} title={on.open ? '' : 'Opens at 18:00'}>
             Overnight {band ? R(overnightPrice) : '…'}
           </button>
+          <button className={stay_type === 'event' ? 'on' : ''} disabled={!eventOpen}
+            onClick={() => setType('event')}
+            title={room.floor !== 'downstairs' ? 'Downstairs rooms only' : ev.open ? '' : 'Opens at 18:00'}>
+            Event {ev.base_amount ? `${R(ev.base_amount)} + plates` : '…'}
+          </button>
         </div>
         {stay_type !== 'hourly' && band && (
           <div className="sub">
@@ -154,6 +164,16 @@ function CheckInModal({ room, rates = {}, onClose }) {
               ? 'Weekend (Fri/Sat/Sun) - includes two R65 plates.'
               : 'Weekday - no food included. Plates are charged separately.'}
           </div>
+        )}
+        {stay_type === 'event' && (
+          <>
+            <label>Number of people (plates)</label>
+            <input type="number" min="1" value={guests}
+              onChange={(e) => setGuests(Math.max(1, parseInt(e.target.value, 10) || 1))} />
+            <div className="sub">
+              {R(ev.base_amount)} base + {guests} × {R(ev.plate_value)} plate. One room for the booker; everyone else is catering only.
+            </div>
+          </>
         )}
         {stay_type === 'hourly' && (
           <>

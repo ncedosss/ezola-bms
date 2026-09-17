@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS stays (
   captured_by UUID NOT NULL REFERENCES users(id),
   guest_name VARCHAR(160) NOT NULL,
   signature_ref TEXT,                               -- replaces the paper login book
-  stay_type TEXT NOT NULL CHECK (stay_type IN ('hourly','overnight','day_night')),
+  stay_type TEXT NOT NULL CHECK (stay_type IN ('hourly','overnight','day_night','event')),
   hours_purchased INTEGER,                          -- 1-5 for hourly; NULL for overnight
   check_in_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ,                           -- check_in + hours (hourly): drives room-grid countdown
@@ -80,7 +80,20 @@ CREATE TABLE IF NOT EXISTS stays (
 -- Constraints have no IF NOT EXISTS - drop then add is the idempotent pair.
 ALTER TABLE stays DROP CONSTRAINT IF EXISTS stays_stay_type_check;
 ALTER TABLE stays ADD CONSTRAINT stays_stay_type_check
-  CHECK (stay_type IN ('hourly','overnight','day_night'));
+  CHECK (stay_type IN ('hourly','overnight','day_night','event'));
+
+-- Events: people catered for (each gets an R65 plate). Not room occupancy - only the booker sleeps over.
+ALTER TABLE stays ADD COLUMN IF NOT EXISTS guest_count INTEGER;
+
+-- Event booking: R840 base + R65 per head. Food always included, downstairs rooms only.
+-- Headcount is uncapped - only the booker sleeps over, the rest are catering.
+CREATE TABLE IF NOT EXISTS event_rates (
+  id          BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),  -- single-row table
+  base_amount NUMERIC(10,2) NOT NULL,
+  plate_value NUMERIC(10,2) NOT NULL
+);
+INSERT INTO event_rates (id, base_amount, plate_value)
+VALUES (TRUE, 840, 65) ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS stay_topups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
