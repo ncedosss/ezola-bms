@@ -168,7 +168,7 @@ function NewOrder({ menu, stays, onClose }) {
         method: 'POST',
         body: {
           channel, stay_id: channel === 'room' ? stayId : null, service_type: service,
-          table_number: channel === 'restaurant' ? Number(tableNumber) : null,
+                    table_number: channel === 'restaurant' && service === 'sit_down' ? Number(tableNumber) : null,
           lines: lines.map((l) => ({
             menu_item_id: l.menu_item_id, quantity: l.quantity || 1,
             weight_kg: l.weight_kg ? Number(l.weight_kg) : null,

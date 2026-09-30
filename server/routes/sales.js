@@ -143,7 +143,7 @@ router.post('/orders', requireRole(ORDER_TAKERS), async (req, res) => {
       const order = (await c.query(
         `INSERT INTO orders (order_number,channel,stay_id,service_type,table_number,business_date,created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-        [number, channel, stay_id || null, svc, channel === 'restaurant' ? table_number : null, bdate, req.user.id])).rows[0];
+        [number, channel, stay_id || null, svc, channel === 'restaurant' && svc === 'sit_down' ? table_number : null, bdate, req.user.id])).rows[0];
 
       let total = 0;
       for (const line of lines) {
