@@ -85,6 +85,13 @@ ALTER TABLE stays ADD CONSTRAINT stays_stay_type_check
 -- Events: people catered for (each gets an R65 plate). Not room occupancy - only the booker sleeps over.
 ALTER TABLE stays ADD COLUMN IF NOT EXISTS guest_count INTEGER;
 
+
+-- Overstay voided by the owner / office manager: the guest left on time but wasn't booked out.
+ALTER TABLE stays ADD COLUMN IF NOT EXISTS overstay_voided_by UUID REFERENCES users(id);
+ALTER TABLE stays ADD COLUMN IF NOT EXISTS overstay_void_reason TEXT;
+ALTER TABLE stays ADD COLUMN IF NOT EXISTS overstay_voided_hours INTEGER;
+ALTER TABLE stays ADD COLUMN IF NOT EXISTS overstay_voided_amount NUMERIC(10,2);
+
 -- Event booking: R840 base + R65 per head. Food always included, downstairs rooms only.
 -- Headcount is uncapped - only the booker sleeps over, the rest are catering.
 CREATE TABLE IF NOT EXISTS event_rates (

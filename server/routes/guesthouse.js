@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const pool = require('../db');
-const { requireAuth, requireRole, RECEPTION_PLUS, R65_CONFIRM_USERS } = require('../middleware/auth');
+const { requireAuth, requireRole, RECEPTION_PLUS, R65_CONFIRM_USERS, OVERSTAY_VOIDERS } = require('../middleware/auth');
 const { businessDate, audit, alert, nextOrderNumber, tx, httpErr } = require('../lib/helpers');
 
 router.use(requireAuth);
@@ -316,6 +316,44 @@ router.post('/stays/:id/checkout', requireRole(RECEPTION_PLUS), async (req, res)
       await c.query(`UPDATE rooms SET status='cleaning' WHERE id=$1`, [s.room_id]);
       await audit(c, req.user.id, 'check_out', 'stays', s.id, { room: s.room_number, overstayCharge, extraHours });
       return { stay: upd, overstay_charge: overstayCharge, extra_hours: extraHours };
+    });
+    res.json(out);
+  } catch (e) { res.status(httpErr(e)).json({ error: e.message }); }
+});
+
+// S05 - void an overstay. For when the guest left on time but reception forgot to book them out,
+// so checkout is blocked by an overdue charge nobody owes. Owner / office manager only, reason required.
+// Nothing is charged; the stay closes and the room goes to cleaning like a normal checkout.
+router.post('/stays/:id/void-overstay', requireRole(OVERSTAY_VOIDERS), async (req, res) => {
+  const reason = (req.body.reason || '').trim();
+  if (reason.length < 5) return res.status(400).json({ error: 'Give a reason for voiding the overstay' });
+  try {
+    const out = await tx(async (c) => {
+      const s = (await c.query(
+        `SELECT s.*, r.hourly_rate, r.room_number FROM stays s JOIN rooms r ON r.id=s.room_id WHERE s.id=$1 FOR UPDATE OF s`,
+        [req.params.id])).rows[0];
+      if (!s || s.status !== 'active') throw Object.assign(new Error('Active stay not found'), { code: 404 });
+      if (!s.expires_at || new Date() <= new Date(s.expires_at))
+        throw Object.assign(new Error('This guest is not overdue - use the normal check out'), { code: 400 });
+
+      const voidedHours = Math.ceil((Date.now() - new Date(s.expires_at).getTime()) / 3600000);
+      const voidedAmount = voidedHours * Number(s.hourly_rate);
+
+      await c.query(`UPDATE meal_credits SET status='expired' WHERE stay_id=$1 AND status='issued'`, [s.id]);
+      const upd = (await c.query(
+        `UPDATE stays SET status='completed', check_out_at=now(),
+                overstay_voided_by=$1, overstay_void_reason=$2,
+                overstay_voided_hours=$3, overstay_voided_amount=$4
+         WHERE id=$5 RETURNING *`,
+        [req.user.id, reason, voidedHours, voidedAmount, s.id])).rows[0];
+      await c.query(`UPDATE rooms SET status='cleaning' WHERE id=$1`, [s.room_id]);
+
+      await alert(c, 'overstay_voided',
+        `Room ${s.room_number} (${s.guest_name}): ${voidedHours}h overstay (R${voidedAmount}) voided by ${req.user.name}: ${reason}`,
+        { stay_id: s.id });
+      await audit(c, req.user.id, 'overstay_void', 'stays', s.id,
+        { room: s.room_number, voided_hours: voidedHours, voided_amount: voidedAmount, expired_at: s.expires_at, reason });
+      return { stay: upd, voided_hours: voidedHours, voided_amount: voidedAmount };
     });
     res.json(out);
   } catch (e) { res.status(httpErr(e)).json({ error: e.message }); }

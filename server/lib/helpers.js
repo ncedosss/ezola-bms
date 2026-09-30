@@ -46,7 +46,8 @@ async function nextOrderNumber(client, channel, bdate) {
 // Deduct estimated stock for a paid order (recipe_consumption; per-kg lines scale by weight)
 async function deductStockForOrder(client, orderId, direction = 1) {
   const { rows: items } = await client.query(
-    `SELECT oi.*, mi.pricing_type FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id WHERE oi.order_id=$1`, [orderId]);
+    `SELECT oi.*, mi.pricing_type, mi.name AS item_name, mi.stock_register, mi.category
+     FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id WHERE oi.order_id=$1`, [orderId]);
   for (const it of items) {
     const { rows: recipes } = await client.query(
       `SELECT rc.*, mo.name AS option_name, mog.name AS group_name
@@ -55,6 +56,7 @@ async function deductStockForOrder(client, orderId, direction = 1) {
        LEFT JOIN menu_option_groups mog ON mog.id = mo.group_id
        WHERE rc.menu_item_id=$1`, [it.menu_item_id]);
     const sel = it.selected_options || {};
+    let deducted = 0;
     for (const r of recipes) {
       if (r.menu_option_id && sel[r.group_name] !== r.option_name) continue; // option not chosen
       const factor = it.pricing_type === 'per_kg' ? Number(it.weight_kg || 0) : it.quantity;
@@ -64,6 +66,21 @@ async function deductStockForOrder(client, orderId, direction = 1) {
         `UPDATE stock_items SET current_quantity = current_quantity - $1, updated_at=now() WHERE id=$2`,
         [qty, r.stock_item_id]);
       await checkLowStock(client, r.stock_item_id);
+      deducted++;
+    }
+    // A kitchen item sold without reducing any stock - tell the owner once, until acknowledged
+    const isKitchen = it.stock_register === 'kitchen' ||
+      (!it.stock_register && ['plate', 'protein_standalone', 'braai_per_kg'].includes(it.category));
+    if (deducted === 0 && direction > 0 && isKitchen) {
+      const option = Object.values(sel).join(', ');
+      const label = option ? `${it.item_name} (${option})` : it.item_name;
+      const open = await client.query(
+        `SELECT 1 FROM alerts WHERE type='stock_not_linked' AND acknowledged=FALSE AND message LIKE $1 LIMIT 1`,
+        [`${label}:%`]);
+      if (!open.rowCount)
+        await alert(client, 'stock_not_linked',
+          `${label}: sold but not linked to any kitchen stock, so stock was not reduced. Set it under Menu > Stock usage.`,
+          { menu_item_id: it.menu_item_id });
     }
   }
 }

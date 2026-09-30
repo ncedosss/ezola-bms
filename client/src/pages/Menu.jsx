@@ -3,6 +3,10 @@ import { api, R } from '../api.js';
 import { useToast } from '../components/Toast.jsx';
 import AsyncButton from '../components/AsyncButton.jsx';
 
+// Kitchen food: set to the kitchen register, or a food category added without a register
+const KITCHEN_CATEGORIES = ['plate', 'protein_standalone', 'braai_per_kg'];
+const isKitchenItem = (m) => m.stock_register === 'kitchen' || (!m.stock_register && KITCHEN_CATEGORIES.includes(m.category));
+
 // Owner-only: set prices, flip availability, add kitchen/add-on items, and price shop stock.
 export default function Menu() {
   const toast = useToast();
@@ -11,6 +15,7 @@ export default function Menu() {
   const [showNew, setShowNew] = useState(false);
   const [showShop, setShowShop] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [recipeFor, setRecipeFor] = useState(null); // kitchen item whose stock usage is being edited
   const load = () => api('/api/menu').then(setItems).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
 
@@ -64,7 +69,12 @@ export default function Menu() {
             <tbody>
               {items.filter((m) => m.category === cat).map((m) => (
                 <tr key={m.id}>
-                  <td>{m.name}</td>
+                  <td>
+                    {m.name}
+                    {isKitchenItem(m) && m.recipe_count === 0 && (
+                      <> <span className="badge red">not linked to stock</span></>
+                    )}
+                  </td>
                   <td>
                     {m.pricing_type === 'dual_fixed' && <>
                       sit-down <input type="number" step="0.01" style={{ width: 90 }}
@@ -93,6 +103,9 @@ export default function Menu() {
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <AsyncButton className="btn sm" disabled={!m._dirty} onClick={() => save(m)}>Save</AsyncButton>{' '}
+                    {isKitchenItem(m) && (
+                      <><button className="btn sm ghost" onClick={() => setRecipeFor(m)}>Stock usage</button>{' '}</>
+                    )}
                     {confirmDel === m.id ? (
                       <>
                         <AsyncButton className="btn sm red" onClick={() => del(m)}>Confirm</AsyncButton>{' '}
@@ -113,6 +126,13 @@ export default function Menu() {
         <ShopStockPricingModal
           onClose={() => setShowShop(false)}
           onSaved={(created) => { setShowShop(false); toast(`${created.name} priced and added to the Tuck Shop.`, 'success'); load(); }}
+        />
+      )}
+      {recipeFor && (
+        <RecipeModal
+          item={recipeFor}
+          onClose={() => setRecipeFor(null)}
+          onSaved={() => { toast(`${recipeFor.name}: stock usage saved.`, 'success'); setRecipeFor(null); load(); }}
         />
       )}
       {showNew && (
@@ -312,6 +332,106 @@ function NewMenuItemModal({ onClose, onSaved }) {
         <div className="btnrow" style={{ marginTop: 16, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
           <AsyncButton className="btn green" disabled={!canSave} onClick={submit}>{saving ? 'Saving…' : 'Add menu item'}</AsyncButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Kitchen stock usage (what each sale takes off stock) ---------------- */
+function RecipeModal({ item, onClose, onSaved }) {
+  const [data, setData] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    api(`/api/menu/${item.id}/recipe`)
+      .then((d) => {
+        setData(d);
+        setRows(d.rows.map((r) => ({
+          menu_option_id: r.menu_option_id || '', stock_item_id: r.stock_item_id, quantity_per_unit: Number(r.quantity_per_unit),
+        })));
+      })
+      .catch((e) => setErr(e.message));
+  }, [item.id]);
+
+  const perKg = item.pricing_type === 'per_kg';
+  const setRow = (i, field, value) => setRows(rows.map((r, j) => (j === i ? { ...r, [field]: value } : r)));
+  const addRow = () => setRows([...rows, { menu_option_id: '', stock_item_id: '', quantity_per_unit: '' }]);
+  const removeRow = (i) => setRows(rows.filter((_, j) => j !== i));
+
+  // Fill the quantity from the stock item's plate yield, e.g. a sheep that makes 10 plates -> 0.1
+  const useYield = (i) => {
+    const s = data.stock.find((x) => x.id === rows[i].stock_item_id);
+    if (s && Number(s.plate_yield) > 0) setRow(i, 'quantity_per_unit', Math.round((1 / Number(s.plate_yield)) * 10000) / 10000);
+  };
+
+  const save = async () => {
+    setErr('');
+    try {
+      await api(`/api/menu/${item.id}/recipe`, { method: 'PUT', body: {
+        rows: rows.map((r) => ({
+          menu_option_id: r.menu_option_id || null,
+          stock_item_id: r.stock_item_id,
+          quantity_per_unit: Number(r.quantity_per_unit),
+        })),
+      }});
+      onSaved();
+    } catch (e) { setErr(e.message); }
+  };
+
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 760 }} onClick={(e) => e.stopPropagation()}>
+        <h2>Stock usage - {item.name}</h2>
+        <div className="sub">
+          What one {perKg ? 'kg sold' : 'sale'} takes off kitchen stock. Lines set to an option (e.g. Protein: Lamb)
+          only apply when that option is chosen on the order.
+        </div>
+        {err && <div className="err">{err}</div>}
+        {!data ? <div className="sub">Loading…</div> : (
+          <>
+            <table>
+              <thead><tr><th>Applies to</th><th>Stock item</th><th>Qty per {perKg ? 'kg' : 'sale'}</th><th></th></tr></thead>
+              <tbody>
+                {rows.map((r, i) => {
+                  const s = data.stock.find((x) => x.id === r.stock_item_id);
+                  return (
+                    <tr key={i}>
+                      <td>
+                        <select value={r.menu_option_id} onChange={(e) => setRow(i, 'menu_option_id', e.target.value)}>
+                          <option value="">Every sale</option>
+                          {data.options.map((o) => <option key={o.id} value={o.id}>{o.group_name}: {o.name}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <select value={r.stock_item_id} onChange={(e) => setRow(i, 'stock_item_id', e.target.value)}>
+                          <option value="">Choose…</option>
+                          {data.stock.map((x) => <option key={x.id} value={x.id}>{x.name} ({x.unit.replace('_', ' ')})</option>)}
+                        </select>
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <input type="number" step="0.0001" style={{ width: 90 }} value={r.quantity_per_unit}
+                          onChange={(e) => setRow(i, 'quantity_per_unit', e.target.value)} />
+                        {s && <> {s.unit.replace('_', ' ')}</>}
+                        {s && Number(s.plate_yield) > 0 && !perKg && (
+                          <button className="btn sm ghost" style={{ marginLeft: 6 }} onClick={() => useYield(i)}>
+                            1/{Number(s.plate_yield)}
+                          </button>
+                        )}
+                      </td>
+                      <td><button className="btn sm ghost" onClick={() => removeRow(i)}>Remove</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <button className="btn sm ghost" style={{ marginTop: 8 }} onClick={addRow}>+ Add line</button>
+          </>
+        )}
+        <div className="btnrow" style={{ marginTop: 14 }}>
+          <AsyncButton className="btn green" disabled={!data} onClick={save}>Save stock usage</AsyncButton>
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
         </div>
       </div>
     </div>

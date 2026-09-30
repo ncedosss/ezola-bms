@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, R } from '../api.js';
 import { useToast } from '../components/Toast.jsx';  
 import AsyncButton from '../components/AsyncButton.jsx';
+import { useAuth } from '../App.jsx';
 
 // S03 room grid + S04 check-in + S05 stays & checkout + R65 cash-transfer confirms
 export default function Rooms() {
@@ -216,6 +217,9 @@ function StayModal({ room, onClose }) {
   const [method, setMethod] = useState('cash');
   const [err, setErr] = useState('');
   const [overdueInfo, setOverdueInfo] = useState(null);
+  const { user } = useAuth();
+  const canVoidOverstay = ['owner', 'office_manager'].includes(user?.role);
+  const [voidReason, setVoidReason] = useState('');
 
   useEffect(() => {
     api('/api/guesthouse/stays/active').then((rows) => setStay(rows.find((s) => s.id === room.stay_id))).catch((e) => setErr(e.message));
@@ -239,6 +243,18 @@ function StayModal({ room, onClose }) {
       onClose();
     } catch (e) { setErr(e.message); }
   };
+    // Owner / office manager: guest left on time but wasn't booked out - close the stay without the charge
+  const voidOverstay = async () => {
+    setErr('');
+    try {
+      const out = await api(`/api/guesthouse/stays/${stay.id}/void-overstay`, {
+        method: 'POST', body: { reason: voidReason },
+      });
+      toast(`Overstay voided (${out.voided_hours}h, ${R(out.voided_amount)}). Guest checked out - room moved to cleaning.`, 'warn', 8000);
+      onClose();
+    } catch (e) { setErr(e.message); }
+  };
+
   const doCheckout = async (payMethod) => {
     setErr('');
     try {
@@ -355,12 +371,38 @@ function StayModal({ room, onClose }) {
               <h2>Check out (key returned)</h2>
 
               {isOverdue ? (
-                <div className="err">
-                  Checkout is not available yet.
-                  <br />
-                  Please collect the overdue amount of{' '}
-                  <strong>{R(overdueAmount)}</strong> first.
-                </div>
+                <>
+                  <div className="err">
+                    Checkout is not available yet.
+                    <br />
+                    Please collect the overdue amount of{' '}
+                    <strong>{R(overdueAmount)}</strong> first.
+                  </div>
+
+                  {canVoidOverstay ? (
+                    <div style={{ marginTop: 12 }}>
+                      <label>Guest left on time but wasn't booked out? Void the overstay</label>
+                      <textarea
+                        rows="2"
+                        value={voidReason}
+                        onChange={(e) => setVoidReason(e.target.value)}
+                        placeholder="e.g. guest left at 15:00, reception forgot to book out"
+                      />
+                      <AsyncButton
+                        className="btn red"
+                        style={{ marginTop: 8 }}
+                        disabled={voidReason.trim().length < 5}
+                        onClick={voidOverstay}
+                      >
+                        Void {R(overdueAmount)} & check out
+                      </AsyncButton>
+                    </div>
+                  ) : (
+                    <div className="sub" style={{ marginTop: 8 }}>
+                      If the guest left on time, ask the owner or office manager to void the overstay.
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <div className="sub">

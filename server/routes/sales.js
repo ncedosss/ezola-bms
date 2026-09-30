@@ -17,8 +17,74 @@ router.get('/menu', async (req, res) => {
     `SELECT DISTINCT rc.menu_item_id
      FROM recipe_consumption rc JOIN stock_items si ON si.id = rc.stock_item_id
      WHERE rc.menu_option_id IS NULL AND si.current_quantity <= 0`)).rows.map((r) => r.menu_item_id));
-  res.json(items.map((i) => ({ ...i, sold_out: soldOut.has(i.id), option_groups: groups.filter((g) => g.menu_item_id === i.id) })));
+  // How many stock links each item has - the Menu screen flags kitchen items with none
+  const recipeCounts = new Map((await pool.query(
+    `SELECT menu_item_id, COUNT(*)::int AS n FROM recipe_consumption GROUP BY menu_item_id`
+  )).rows.map((r) => [r.menu_item_id, r.n]));
+  res.json(items.map((i) => ({ ...i, sold_out: soldOut.has(i.id), recipe_count: recipeCounts.get(i.id) || 0,
+    option_groups: groups.filter((g) => g.menu_item_id === i.id) })));
 });
+
+// Owner-only: what stock a menu item uses per sale. Kitchen items added from the
+// Menu screen have no link to stock, so selling them never reduced kitchen stock.
+router.get('/menu/:id/recipe', requireRole('owner'), async (req, res) => {
+  const item = (await pool.query(`SELECT * FROM menu_items WHERE id=$1`, [req.params.id])).rows[0];
+  if (!item) return res.status(404).json({ error: 'Menu item not found' });
+  const options = (await pool.query(
+    `SELECT o.id, o.name, g.name AS group_name
+     FROM menu_options o JOIN menu_option_groups g ON g.id = o.group_id
+     WHERE g.menu_item_id = $1 ORDER BY g.name, o.name`, [item.id])).rows;
+  const rows = (await pool.query(
+    `SELECT rc.id, rc.menu_option_id, rc.stock_item_id, rc.quantity_per_unit
+     FROM recipe_consumption rc WHERE rc.menu_item_id = $1`, [item.id])).rows;
+  const stock = (await pool.query(
+    `SELECT id, name, unit, plate_yield, current_quantity FROM stock_items
+     WHERE register = $1 ORDER BY name`, [item.stock_register || 'kitchen'])).rows;
+  res.json({ item, options, rows, stock });
+});
+
+// Replaces the item's stock usage in one go. rows: [{ menu_option_id|null, stock_item_id, quantity_per_unit }]
+router.put('/menu/:id/recipe', requireRole('owner'), async (req, res) => {
+  const rows = Array.isArray(req.body.rows) ? req.body.rows : null;
+  if (!rows) return res.status(400).json({ error: 'rows are required' });
+  for (const r of rows) {
+    if (!r.stock_item_id) return res.status(400).json({ error: 'Every line needs a stock item' });
+    if (!(Number(r.quantity_per_unit) > 0)) return res.status(400).json({ error: 'Every line needs a quantity above 0' });
+  }
+  try {
+    await tx(async (c) => {
+      const item = (await c.query(`SELECT * FROM menu_items WHERE id=$1 FOR UPDATE`, [req.params.id])).rows[0];
+      if (!item) throw Object.assign(new Error('Menu item not found'), { code: 404 });
+      const register = item.stock_register || 'kitchen';
+
+      const validOptions = new Set((await c.query(
+        `SELECT o.id FROM menu_options o JOIN menu_option_groups g ON g.id = o.group_id WHERE g.menu_item_id = $1`,
+        [item.id])).rows.map((o) => o.id));
+      const validStock = new Set((await c.query(
+        `SELECT id FROM stock_items WHERE register = $1`, [register])).rows.map((s) => s.id));
+      for (const r of rows) {
+        if (r.menu_option_id && !validOptions.has(r.menu_option_id))
+          throw Object.assign(new Error('An option does not belong to this menu item'), { code: 400 });
+        if (!validStock.has(r.stock_item_id))
+          throw Object.assign(new Error(`Stock items must be from the ${register.replace('_', ' ')} register`), { code: 400 });
+      }
+
+      const before = (await c.query(
+        `SELECT menu_option_id, stock_item_id, quantity_per_unit FROM recipe_consumption WHERE menu_item_id=$1`,
+        [item.id])).rows;
+      await c.query(`DELETE FROM recipe_consumption WHERE menu_item_id=$1`, [item.id]);
+      for (const r of rows) {
+        await c.query(
+          `INSERT INTO recipe_consumption (menu_item_id, menu_option_id, stock_item_id, quantity_per_unit)
+           VALUES ($1,$2,$3,$4)`,
+          [item.id, r.menu_option_id || null, r.stock_item_id, Number(r.quantity_per_unit)]);
+      }
+      await audit(c, req.user.id, 'menu_recipe_update', 'menu_items', item.id, { name: item.name, before, after: rows });
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(httpErr(e)).json({ error: e.message }); }
+});
+
 
 // Owner-only price/availability edits ('no on-the-spot negotiation' rule)
 router.patch('/menu/:id', requireRole('owner'), async (req, res) => {

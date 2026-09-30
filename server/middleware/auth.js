@@ -25,5 +25,7 @@ const RECEPTION_PLUS = ['owner', 'office_manager', 'facility_manager', 'receptio
 const KITCHEN_PLUS = ['owner', 'office_manager', 'facility_manager', 'kitchen'];
 const RECON_USERS = ['owner', 'office_manager', 'facility_manager'];
 const R65_CONFIRM_USERS = ['owner', 'office_manager', 'facility_manager', 'shop_attendant'];
+// Can void an overstay charge when a guest left on time but wasn't booked out
+const OVERSTAY_VOIDERS = ['owner', 'office_manager'];
 
-module.exports = { sign, requireAuth, requireRole, MANAGERS, ORDER_TAKERS, PAYMENT_TAKERS, R65_CONFIRM_USERS, RECEPTION_PLUS, KITCHEN_PLUS, RECON_USERS };
+module.exports = { sign, requireAuth, requireRole, MANAGERS, ORDER_TAKERS, PAYMENT_TAKERS, R65_CONFIRM_USERS, RECEPTION_PLUS, KITCHEN_PLUS, RECON_USERS, OVERSTAY_VOIDERS };
