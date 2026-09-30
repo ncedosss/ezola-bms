@@ -130,8 +130,9 @@ router.post('/orders', requireRole(ORDER_TAKERS), async (req, res) => {
   if (!['restaurant', 'tuck_shop', 'room', 'uber'].includes(channel)) return res.status(400).json({ error: 'Invalid channel' });
   if (req.user.role === 'waiter' && channel !== 'restaurant') return res.status(403).json({ error: 'Waiters can only take restaurant orders' });
   if (channel === 'room' && !stay_id) return res.status(400).json({ error: 'Room orders need the stay' });
-  if (channel === 'restaurant' && !(table_number >= 1 && table_number <= 9))
-    return res.status(400).json({ error: 'Restaurant orders need a table number (1-9)' });
+  // Only sit-down restaurant orders sit at a table - takeaway has no seat
+  if (channel === 'restaurant' && service_type !== 'takeaway' && !(table_number >= 1 && table_number <= 9))
+    return res.status(400).json({ error: 'Sit-down restaurant orders need a table number (1-9)' });
   if (!Array.isArray(lines) || !lines.length) return res.status(400).json({ error: 'Order has no lines' });
   const svc = service_type === 'takeaway' ? 'takeaway' : 'sit_down'; // room-eaten = sit_down R65; taken after stay = takeaway R70
 
