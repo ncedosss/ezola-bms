@@ -131,3 +131,21 @@ db/seed.js        discovery data: users, rooms, menu, 3 stock registers, recipes
 scripts/migrate.js applies schema (also Heroku release phase)
 client/           React (Vite) SPA — one page per screen S01–S15
 ```
+
+## 7. Public website (marketing)
+
+The public website for LES Guest House lives in the same React client and is served at the home page:
+
+| Address | What it shows |
+|---|---|
+| `/` | Public website: rooms and prices, restaurant, tuck shop, events, TikTok video, map |
+| `/login` and the rest | Staff business management system (unchanged) |
+
+- **Edit the content in one place:** `client/src/site/siteContent.js` holds the address, phone/WhatsApp/email,
+  opening hours, room rates, plate prices, extras, shop items, events and image links. Fill in `phone`,
+  `whatsapp` or `email` and the Call / WhatsApp / Email buttons appear automatically.
+- **Prices** are copied from `db/seed.js`. When the owner changes a price in the system, update it here too.
+- **Tshisa nyama:** set `shisaNyama.reopened` to `true` when the braai reopens.
+- **Photos:** the owner's photos are in `client/public/site/`. The other photos are free Unsplash images
+  (credited in the footer). To swap one for your own photo, drop it in `client/public/site/` and change its `src`.
+- The staff system is loaded only when a staff page is opened, so the public site stays light on mobile data.
