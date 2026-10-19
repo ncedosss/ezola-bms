@@ -44,7 +44,7 @@ export const mapEmbedUrl = `https://maps.google.com/maps?q=${mapsQuery}&z=16&out
 export const rooms = {
   count: 10,
   rates: [
-    { room: 'Downstairs rooms', count: 4, hourly: 130, weekday: 550, weekend: 550 },
+    { room: 'Downstairs rooms', count: 4, hourly: 130, weekday: 420, weekend: 550 },
     { room: 'Upstairs rooms', count: 4, hourly: 150, weekday: 420, weekend: 550 },
     { room: 'Upstairs, renovated', count: 2, hourly: 150, weekday: 520, weekend: 650 },
   ],
