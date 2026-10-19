@@ -49,7 +49,8 @@ export const rooms = {
     { room: 'Upstairs, renovated', count: 2, hourly: 150, weekday: 520, weekend: 650 },
   ],
   notes: [
-    'Overnight stays include a plate of food from our kitchen.',
+    'Weekend overnight stays (Friday, Saturday and Sunday nights) include two plates of food from our kitchen.',
+    'Overnight stays start from 18:00 and check-out is at 11:00 the next morning.',
     'Short stays are paid upfront for 1 to 5 hours, and you can add more time at reception.',
     'Pay at reception by cash or card. Keys are handed over once you’ve paid.',
   ],
@@ -113,7 +114,7 @@ export const images = {
   sign: { src: '/site/sign.jpg', alt: 'The LES Guest House & Events Facility sign at the entrance' },
   room: { src: unsplash('photo-1631049421450-348ccd7f8949'), alt: 'A made-up double bed with white linen and bedside lamps',
     credit: { name: 'Point3D Commercial Imaging Ltd.', url: 'https://unsplash.com/photos/_Swg04CP0bU' } },
-  grill: { src: '/site/plate.jpg', alt: 'Meat grilling over hot coals',
+  grill: { src: unsplash('photo-1529262123100-898cb9e0d85b'), alt: 'Meat grilling over hot coals',
     credit: { name: 'Jo Jo', url: 'https://unsplash.com/photos/wI__5oGrpf4' } },
   braai: { src: unsplash('photo-1512719724284-dbb9ef47eac5'), alt: 'Flames rising from a braai in Strand, Cape Town',
     credit: { name: 'Jaco Pretorius', url: 'https://unsplash.com/photos/Ry6vwtAJu4g' } },

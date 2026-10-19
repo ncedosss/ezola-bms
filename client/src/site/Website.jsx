@@ -117,7 +117,7 @@ function Stay() {
             <table className="s-rates">
               <caption className="s-sr">Room prices</caption>
               <thead>
-                <tr><th scope="col">Room</th><th scope="col">Per hour</th><th scope="col">Overnight, weekday</th><th scope="col">Overnight, weekend</th></tr>
+                <tr><th scope="col">Room</th><th scope="col">Per hour</th><th scope="col">Overnight, Mon–Thu</th><th scope="col">Overnight, Fri–Sun</th></tr>
               </thead>
               <tbody>
                 {rooms.rates.map((r) => (
