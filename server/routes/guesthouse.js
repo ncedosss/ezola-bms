@@ -109,9 +109,14 @@ router.patch('/rooms/:id/status', requireRole(RECEPTION_PLUS), async (req, res) 
 // S04 - check-in. Hourly (1-5 hrs, paid upfront in full) or overnight (R550, issues R65 meal credit).
 // Keys only after payment -> payment is recorded here atomically with the stay.
 router.post('/stays', requireRole(RECEPTION_PLUS), async (req, res) => {
-  const { room_id, guest_name, signature_ref, stay_type, hours, payment_method, condoms, guest_count } = req.body;
+  const { room_id, guest_name, guest_cell, guest_address, signature_ref, stay_type, hours, payment_method, condoms, guest_count } = req.body;
   const condomQty = Math.max(0, parseInt(condoms || 0, 10));
   if (!room_id || !guest_name || !stay_type) return res.status(400).json({ error: 'room, guest name and stay type are required' });
+  const cell = String(guest_cell || '').replace(/[\s-]/g, '');
+  if (!/^(\+27|0)[6-8]\d{8}$/.test(cell))
+    return res.status(400).json({ error: 'A valid cell number is required (e.g. 072 123 4567)' });
+  if (!String(guest_address || '').trim())
+    return res.status(400).json({ error: 'Guest address is required' });
   if (!['cash', 'card'].includes(payment_method)) return res.status(400).json({ error: 'payment method (cash/card) required - keys only after payment' });
   if (stay_type === 'hourly' && !(hours >= 1 && hours <= 5)) return res.status(400).json({ error: 'Hourly stays are 1-5 hours' });
 
@@ -151,11 +156,12 @@ router.post('/stays', requireRole(RECEPTION_PLUS), async (req, res) => {
         (band === 'weekend' ? Number(room.overnight_rate) : Number(room.overnight_rate_weekday));
       const stay = (await c.query(
         `INSERT INTO stays (room_id, captured_by, guest_name, signature_ref, stay_type, hours_purchased,
-                            expires_at, amount_due, amount_paid, overnight_band, guest_count)
-      VALUES ($1,$2,$3,$4,$5,$6::int, CASE WHEN $5::text='hourly' THEN now() + make_interval(hours => $6::int) ELSE $8::timestamptz END, $7, $7, $9, $10)
+                            expires_at, amount_due, amount_paid, overnight_band, guest_count, guest_cell, guest_address)
+      VALUES ($1,$2,$3,$4,$5,$6::int, CASE WHEN $5::text='hourly' THEN now() + make_interval(hours => $6::int) ELSE $8::timestamptz END, $7, $7, $9, $10, $11, $12)
          RETURNING *`,
         [room_id, req.user.id, guest_name || null, signature_ref || null, stay_type,
-         stay_type === 'hourly' ? hours : null, amount, nextMorningDeadline(bdate), band, guests]
+         stay_type === 'hourly' ? hours : null, amount, nextMorningDeadline(bdate), band, guests,
+         cell, String(guest_address).trim()]
       )).rows[0];
 
       await c.query(`UPDATE rooms SET status='occupied' WHERE id=$1`, [room_id]);

@@ -46,6 +46,9 @@ UPDATE rooms
 ALTER TABLE stays ADD COLUMN IF NOT EXISTS
   overnight_band TEXT CHECK (overnight_band IN ('weekday','weekend'));
 
+ALTER TABLE stays ADD COLUMN IF NOT EXISTS guest_cell VARCHAR(20);
+ALTER TABLE stays ADD COLUMN IF NOT EXISTS guest_address TEXT;
+
 -- Discounted upfront hourly packages (rate card at reception).
 -- Only applies to money taken at check-in; top-ups bill at rooms.hourly_rate.
 CREATE TABLE IF NOT EXISTS hourly_rate_tiers (

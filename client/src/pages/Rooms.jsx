@@ -88,6 +88,8 @@ export default function Rooms() {
 function CheckInModal({ room, rates = {}, onClose }) {
   const toast = useToast();
   const [guest_name, setName] = useState('');
+  const [guest_cell, setCell] = useState('');
+  const [guest_address, setAddress] = useState('');
   const [stay_type, setType] = useState('hourly');
   const [hours, setHours] = useState(1);
   const [payment_method, setMethod] = useState('cash');
@@ -118,7 +120,7 @@ function CheckInModal({ room, rates = {}, onClose }) {
     try {
       const out = await api('/api/guesthouse/stays', {
         method: 'POST',
-        body: { room_id: room.id, guest_name, stay_type, hours: Number(hours), payment_method, condoms: Number(condoms), guest_count: Number(guests) },
+        body: { room_id: room.id, guest_name, guest_cell, guest_address, stay_type, hours: Number(hours), payment_method, condoms: Number(condoms), guest_count: Number(guests) },
       });
     if (out.meal_credit) {
         if (out.meal_credit.funding_method === 'cash_walked')
@@ -139,6 +141,10 @@ function CheckInModal({ room, rates = {}, onClose }) {
         {err && <div className="err">{err}</div>}
         <label>Guest name *</label>
         <input value={guest_name} onChange={(e) => setName(e.target.value)} autoFocus />
+        <label>Cell number *</label>
+        <input type="tel" inputMode="tel" placeholder="e.g. 072 123 4567" value={guest_cell} onChange={(e) => setCell(e.target.value)} />
+        <label>Address *</label>
+        <input value={guest_address} onChange={(e) => setAddress(e.target.value)} />
         <label>Stay type</label>
         <div className="tabs">
           <button className={stay_type === 'hourly' ? 'on' : ''} onClick={() => setType('hourly')}>Hourly (1-5)</button>
@@ -201,7 +207,7 @@ function CheckInModal({ room, rates = {}, onClose }) {
         </div>
         <div className="btnrow" style={{ marginTop: 16, justifyContent: 'space-between' }}>
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <AsyncButton className="btn green" disabled={!guest_name.trim()} onClick={submit}>
+          <AsyncButton className="btn green" disabled={!guest_name.trim() || !guest_cell.trim() || !guest_address.trim()} onClick={submit}>
             Take {R(amount)}{condoms > 0 ? ` (room ${R(roomAmount)} + ${condoms}× condom)` : ''} & check in
           </AsyncButton>
         </div>
